@@ -383,6 +383,11 @@ body::before {
 .help ol { margin: 8px 0 0; padding-left: 20px; color: var(--muted); font-size: 0.9rem; }
 .help li { margin-bottom: 4px; }
 
+/* Prompt-Box auf der Import-Seite */
+.prompt-box { margin-bottom: 6px; }
+.prompt-box .setting-part { margin-top: 10px; }
+#ai-prompt { min-height: 230px; font-family: ui-monospace, Consolas, monospace; font-size: 0.82rem; }
+
 /* Fußzeile */
 .footer { text-align: center; color: var(--muted); font-size: 0.8rem; padding: 16px 16px 28px; }
 .footer p { margin: 4px 0; }
@@ -471,11 +476,26 @@ body::before {
   <section id="screen-import" class="hidden">
     <!-- Teil 1: JSON einfügen oder Datei wählen -->
     <div id="import-input" class="import-box">
+      <!-- Fertiger Prompt für eine KI: Fotos rein, passendes JSON raus -->
+      <details class="setting help prompt-box">
+        <summary>🤖 Prompt für die KI – Vokabeln aus Fotos auslesen</summary>
+        <div class="setting-part">
+          <p class="info">So geht's: Prompt kopieren → neuen Chat mit einer KI (z. B. Claude) öffnen →
+            Prompt einfügen und Fotos anhängen → die Antwort unten einfügen.</p>
+          <label for="prompt-subject">Fach</label>
+          <input id="prompt-subject" type="text" maxlength="100" autocomplete="off" placeholder="z. B. Spanisch">
+          <label for="prompt-deck">Deck</label>
+          <input id="prompt-deck" type="text" maxlength="100" autocomplete="off" placeholder="z. B. Lección 1">
+          <textarea id="ai-prompt" readonly spellcheck="false"></textarea>
+          <button id="btn-copy-prompt" class="btn-secondary">📋 Prompt kopieren</button>
+        </div>
+      </details>
+
       <label for="import-text">JSON einfügen</label>
       <textarea id="import-text" spellcheck="false"
-        placeholder='{"subject": "Spanisch", "deck": "Lektion 1", "cards": [{"front": "das Haus", "back": "la casa"}]}'></textarea>
-      <label for="import-file" class="btn-secondary file-button">📄 oder .json-Datei auswählen</label>
-      <input id="import-file" type="file" accept=".json,application/json" class="hidden">
+        placeholder='{"subject": "Spanisch", "deck": "Lektion 1", "cards": [{"front": "la casa", "back": "das Haus"}]}'></textarea>
+      <label for="import-file" class="btn-secondary file-button">📄 oder Datei auswählen (.json)</label>
+      <input id="import-file" type="file" accept=".json,.txt,application/json,text/plain" class="hidden">
       <p id="import-error" class="error"></p>
       <button id="btn-parse" class="btn-primary btn-full">Einlesen</button>
     </div>
@@ -1318,6 +1338,11 @@ function openDeckMenu(deckId) {
   if (data.subjects.length > 1) {
     actions.push({ label: '📁 In anderes Fach verschieben', run: () => openMoveDialog(deck.id) });
   }
+  // "Teilen" nur, wenn das Gerät ein Teilen-Menü hat (vor allem Handys)
+  if (navigator.canShare) {
+    actions.push({ label: '📤 Deck teilen', run: () => shareDeck(deck.id) });
+  }
+  actions.push({ label: '💾 Deck exportieren (Datei)', run: () => exportDeck(deck.id) });
   actions.push({ label: '↺ Fortschritt zurücksetzen', run: () => resetDeckProgress(deck.id) });
   actions.push({ label: '🗑️ Deck löschen', danger: true, run: () => deleteDeck(deck.id) });
   openMenu(deck.name, actions);
@@ -1343,6 +1368,52 @@ function deleteDeck(deckId) {
   data.cards = data.cards.filter(c => c.deckId !== deck.id);
   saveData();
   openSubject(deck.subjectId);
+}
+
+// --- Deck teilen / exportieren ---
+// Ergebnis ist eine Vokabel-Datei im Import-Format – nur Vorder- und Rückseite,
+// ohne Lernfortschritt. So kann jemand anderes das Deck einfach importieren.
+
+function deckExport(deckId) {
+  const deck = findDeck(deckId);
+  const subject = findSubject(deck.subjectId);
+  const content = {
+    subject: subject ? subject.name : '',
+    deck: deck.name,
+    cards: cardsOfDeck(deckId).map(card => ({ front: card.front, back: card.back }))
+  };
+  // Zeichen, die in Dateinamen verboten sind, durch "-" ersetzen
+  const baseName = (subject ? subject.name + ' - ' : '') + deck.name;
+  return {
+    text: JSON.stringify(content, null, 1),
+    baseName: baseName.replace(/[\\/:*?"<>|]/g, '-')
+  };
+}
+
+function exportDeck(deckId) {
+  const result = deckExport(deckId);
+  downloadFile(result.text, result.baseName + '.json');
+  showToast('Deck exportiert');
+}
+
+// Über das Teilen-Menü des Geräts verschicken (z. B. WhatsApp, Mail, AirDrop)
+async function shareDeck(deckId) {
+  const result = deckExport(deckId);
+  // Manche Handys lassen .json-Dateien nicht teilen – dann als .txt versuchen
+  const candidates = [
+    new File([result.text], result.baseName + '.json', { type: 'application/json' }),
+    new File([result.text], result.baseName + '.txt', { type: 'text/plain' })
+  ];
+  const file = candidates.find(f => navigator.canShare({ files: [f] }));
+  if (!file) {
+    exportDeck(deckId); // Teilen nicht möglich → stattdessen herunterladen
+    return;
+  }
+  try {
+    await navigator.share({ files: [file], title: 'Vokabeln: ' + findDeck(deckId).name });
+  } catch (e) {
+    if (e.name !== 'AbortError') exportDeck(deckId); // abgebrochen → nichts tun, sonst herunterladen
+  }
 }
 
 // Deck verschieben: Auswahlliste mit allen Fächern füllen
@@ -1583,8 +1654,53 @@ function toText(value) {
   return value === undefined || value === null ? '' : String(value).trim();
 }
 
+// Der Prompt für die KI – Fach und Deck werden aus den beiden Feldern eingesetzt
+function buildPrompt() {
+  const subject = $('prompt-subject').value.trim() || 'FACH';
+  const deck = $('prompt-deck').value.trim() || 'DECKNAME';
+  return [
+    'Ich lerne Vokabeln mit einer eigenen Karteikarten-App (ähnlich wie Anki). ' +
+    'Ich schicke dir Fotos aus meinem Lehrbuch oder Vokabelheft. Lies alle Vokabeln aus ' +
+    'und gib sie ausschließlich als JSON in genau diesem Format aus – ohne Text davor oder danach:',
+    '',
+    '{"subject": "' + subject + '", "deck": "' + deck + '", "cards": [{"front": "Wort in der Fremdsprache", "back": "deutsche Übersetzung"}]}',
+    '',
+    'Regeln:',
+    '- "front" = Wort oder Ausdruck in der Fremdsprache, "back" = deutsche Übersetzung',
+    '- Artikel, Pluralformen und Hinweise wie „(inf: …)“ so übernehmen, wie sie im Buch stehen',
+    '- Einträge, die im Buch über mehrere Zeilen gehen, zu einer Karte zusammenfassen',
+    '- Übungsbuchstaben (a, b, c) und Abschnittsnummern weglassen',
+    '- Unleserliche Stellen nicht raten, sondern als "???" schreiben',
+    '- Kommt dieselbe Vorderseite mehrfach vor, einen Hinweis aus dem Buch ergänzen, damit jede Vorderseite eindeutig ist',
+    '- Anführungszeichen innerhalb eines Textes als „ “ schreiben, damit das JSON gültig bleibt',
+    '- "subject" ist immer "' + subject + '", "deck" ist immer "' + deck + '"',
+    '- Wenn du Dateien erstellen kannst, biete das Ergebnis zusätzlich als .json-Datei an'
+  ].join('\n');
+}
+
+function updatePrompt() {
+  $('ai-prompt').value = buildPrompt();
+}
+
+// In die Zwischenablage kopieren. navigator.clipboard ist der moderne Weg;
+// klappt der nicht (z. B. bei lokal geöffneter Datei), markieren wir den Text und kopieren klassisch.
+async function copyPrompt() {
+  updatePrompt();
+  try {
+    await navigator.clipboard.writeText($('ai-prompt').value);
+  } catch (e) {
+    $('ai-prompt').select();
+    document.execCommand('copy');
+  }
+  showToast('Prompt kopiert');
+}
+
 function openImport() {
   $('title').textContent = 'Importieren';
+  // Fach im Prompt vorausfüllen, wenn der Import aus einem Fach heraus geöffnet wurde
+  $('prompt-subject').value = currentSubjectId ? findSubject(currentSubjectId).name : '';
+  $('prompt-deck').value = '';
+  updatePrompt();
   $('import-text').value = '';
   $('import-file').value = '';
   $('import-error').textContent = '';
@@ -1925,21 +2041,24 @@ function renderBackupInfo() {
 }
 
 // Alle Daten als .json-Datei herunterladen
-function exportBackup() {
-  // JSON.stringify(…, null, 2) rückt den Text ein, damit er auch für Menschen lesbar ist
-  const text = JSON.stringify(data, null, 2);
+// Text als Datei herunterladen
+function downloadFile(text, fileName) {
   // Ein "Blob" ist eine Datei im Arbeitsspeicher des Browsers …
   const blob = new Blob([text], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   // … und ein unsichtbarer Download-Link, den wir einmal "anklicken"
   const link = document.createElement('a');
   link.href = url;
-  link.download = 'vokabeln-backup-' + todayString() + '.json';
+  link.download = fileName;
   document.body.appendChild(link);
   link.click();
   link.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000); // Speicher wieder freigeben
+}
 
+function exportBackup() {
+  // JSON.stringify(…, null, 2) rückt den Text ein, damit er auch für Menschen lesbar ist
+  downloadFile(JSON.stringify(data, null, 2), 'vokabeln-backup-' + todayString() + '.json');
   localStorage.setItem(BACKUP_KEY, new Date().toISOString());
   renderBackupInfo();
   showToast('Backup heruntergeladen');
@@ -2340,6 +2459,9 @@ document.querySelectorAll('#rating-buttons button').forEach(button => {
 $('btn-study-done').addEventListener('click', returnFromStudy);
 
 $('btn-parse').addEventListener('click', parseImport);
+$('btn-copy-prompt').addEventListener('click', copyPrompt);
+$('prompt-subject').addEventListener('input', updatePrompt);
+$('prompt-deck').addEventListener('input', updatePrompt);
 $('btn-import-save').addEventListener('click', saveImport);
 $('import-subject').addEventListener('input', updateImportStatus);
 $('import-deck').addEventListener('input', updateImportStatus);
