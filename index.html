@@ -202,7 +202,35 @@ label { font-weight: 600; font-size: 0.95rem; }
 /* Startseite: Deck-Zeile mit "Lernen"-Button daneben */
 .deck-row { display: flex; gap: 8px; align-items: stretch; }
 /* Name oben, Zähler darunter – so bleibt auf dem Handy genug Platz für den Namen */
-.deck-row .deck-item { flex: 1; min-width: 0; flex-direction: column; align-items: flex-start; gap: 6px; }
+/* Weiße Karte: links Name + Zähler (antippen öffnet), rechts ⋮ – beides in einem Feld */
+.deck-card {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: stretch;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.deck-row .deck-item {
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  background: transparent;
+  border: none;
+  padding-right: 4px;
+}
+.menu-inline {
+  flex-shrink: 0;
+  min-width: 44px;
+  padding: 8px 10px 8px 4px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 1.4rem;
+  line-height: 1;
+}
 .deck-row .deck-item .name { overflow-wrap: break-word; max-width: 100%; }
 .btn-learn { flex-shrink: 0; }
 button:disabled { opacity: 0.45; cursor: default; }
@@ -952,7 +980,7 @@ function refresh() {
 }
 
 // Eine Listen-Zeile für ein Fach oder ein Deck bauen:
-// Name + Zähler (antippen öffnet), daneben "Lernen" und ⋮
+// weiße Karte mit Name + Zähler (antippen öffnet) und ⋮, daneben "Lernen"
 function makeRow(name, counts, extraBadge, onOpen, onLearn, onMenu) {
   const li = el('li', 'deck-row');
 
@@ -964,17 +992,22 @@ function makeRow(name, counts, extraBadge, onOpen, onLearn, onMenu) {
   badges.appendChild(el('span', 'badge due', counts.due + ' fällig'));
   button.appendChild(badges);
   button.addEventListener('click', onOpen);
-  li.appendChild(button);
+
+  // ⋮ sitzt mit in der weißen Karte. Es ist ein eigener Button NEBEN dem
+  // Öffnen-Button – Buttons dürfen in HTML nicht ineinander stecken.
+  const menuButton = el('button', 'menu-inline', '⋮');
+  menuButton.setAttribute('aria-label', 'Weitere Aktionen für ' + name);
+  menuButton.addEventListener('click', onMenu);
+
+  const card = el('div', 'deck-card');
+  card.appendChild(button);
+  card.appendChild(menuButton);
+  li.appendChild(card);
 
   const learnButton = el('button', 'btn-primary btn-learn', 'Lernen');
   learnButton.disabled = counts.new + counts.due === 0; // nichts zu tun → ausgegraut
   learnButton.addEventListener('click', onLearn);
   li.appendChild(learnButton);
-
-  const menuButton = el('button', 'btn-menu', '⋮');
-  menuButton.setAttribute('aria-label', 'Weitere Aktionen für ' + name);
-  menuButton.addEventListener('click', onMenu);
-  li.appendChild(menuButton);
 
   return li;
 }
