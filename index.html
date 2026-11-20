@@ -348,6 +348,16 @@ body::before {
 }
 
 .setting + .setting { margin-top: 16px; }
+.setting-part { display: flex; flex-direction: column; gap: 10px; }
+
+/* Aufklappbare Anleitung */
+.help summary { cursor: pointer; color: var(--accent); font-weight: 600; font-size: 0.95rem; }
+.help ol { margin: 8px 0 0; padding-left: 20px; color: var(--muted); font-size: 0.9rem; }
+.help li { margin-bottom: 4px; }
+
+/* Fußzeile */
+.footer { text-align: center; color: var(--muted); font-size: 0.8rem; padding: 16px 16px 28px; }
+.footer p { margin: 4px 0; }
 .setting h2 { margin: 0; font-size: 1.1rem; }
 
 /* Ab 600 px Breite (Tablet/PC): Buttons nicht mehr gestreckt */
@@ -475,6 +485,35 @@ body::before {
     </div>
 
     <div class="setting">
+      <h2>Sync zwischen Geräten</h2>
+      <!-- Ansicht, solange der Sync nicht eingerichtet ist -->
+      <div id="sync-off" class="setting-part">
+        <p class="info">Gleicht deine Daten automatisch über GitHub ab – z. B. zwischen PC und Handy.
+          Dafür trägst du auf jedem Gerät einmal einen GitHub-Token ein.</p>
+        <details class="help">
+          <summary>So bekommst du einen Token</summary>
+          <ol>
+            <li>Auf github.com oben rechts auf dein Profilbild → <b>Settings</b>.</li>
+            <li>Links ganz unten <b>Developer settings</b> → <b>Personal access tokens</b> → <b>Fine-grained tokens</b>.</li>
+            <li><b>Generate new token</b>: Name z. B. „Vokabel-App“, Ablaufdatum wählen.</li>
+            <li>Bei den Berechtigungen nur <b>Gists</b> auf <b>Read and write</b> stellen – sonst nichts.</li>
+            <li><b>Generate token</b> und den Token sofort kopieren – GitHub zeigt ihn nur einmal.</li>
+          </ol>
+        </details>
+        <label for="sync-token">Token</label>
+        <input id="sync-token" type="password" autocomplete="off" placeholder="github_pat_…">
+        <button id="btn-sync-connect" class="btn-primary">Verbinden</button>
+      </div>
+      <!-- Ansicht, wenn der Sync läuft -->
+      <div id="sync-on" class="setting-part hidden">
+        <p id="sync-status" class="info"></p>
+        <button id="btn-sync-now" class="btn-secondary">🔄 Jetzt synchronisieren</button>
+        <button id="btn-sync-disconnect" class="btn-danger">Sync auf diesem Gerät trennen</button>
+      </div>
+      <p id="sync-error" class="error"></p>
+    </div>
+
+    <div class="setting">
       <h2>Backup</h2>
       <p class="info">Speichert alle Fächer, Decks, Karten und deinen Lernfortschritt in einer Datei.
         Damit sicherst du deine Daten – oder überträgst sie auf ein anderes Gerät.</p>
@@ -486,6 +525,12 @@ body::before {
     </div>
   </section>
 </main>
+
+<!-- Fußzeile -->
+<footer class="footer">
+  <p id="footer-sync" class="hidden"></p>
+  <p>made by Friede</p>
+</footer>
 
 <!-- Dialog: Namen eingeben (für neue/umbenannte Fächer und Decks) -->
 <dialog id="name-dialog">
@@ -505,6 +550,7 @@ body::before {
 <dialog id="menu-dialog">
   <form>
     <h2 id="menu-title"></h2>
+    <p id="menu-text" class="info hidden"></p>
     <div id="menu-buttons" class="menu-buttons"></div>
   </form>
 </dialog>
@@ -598,7 +644,7 @@ function newId() {
 function emptyData() {
   return {
     version: 2,
-    updatedAt: new Date().toISOString(),
+    updatedAt: null, // noch nie etwas geändert → gilt beim Sync als ältester Stand
     settings: { newPerDay: 20 },
     subjects: [],
     decks: [],
@@ -639,10 +685,8 @@ function migrate(d) {
   return true;
 }
 
-// Daten speichern: Objekt → Text (JSON.stringify) → localStorage.
-// updatedAt merkt sich den Zeitpunkt der letzten Änderung (für den späteren Sync).
-function saveData() {
-  data.updatedAt = new Date().toISOString();
+// Daten in den localStorage schreiben: Objekt → Text (JSON.stringify) → localStorage
+function writeLocal() {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
   } catch (e) {
@@ -650,9 +694,17 @@ function saveData() {
   }
 }
 
+// Nach jeder echten Änderung: Zeitpunkt merken, lokal speichern, Sync anstoßen.
+// updatedAt entscheidet beim Sync, welcher Stand der neuere ist.
+function saveData() {
+  data.updatedAt = new Date().toISOString();
+  writeLocal();
+  schedulePush();
+}
+
 // Der aktuelle Zustand der App – wird beim Start einmal geladen
 let data = loadData();
-if (migrate(data)) saveData();
+if (migrate(data)) writeLocal(); // nur umbauen, nicht als neue Änderung zählen
 
 // Hilfsfunktionen zum Finden, Sortieren und Zählen
 function findSubject(id) {
@@ -684,7 +736,9 @@ function normalize(text) {
 function ensureToday() {
   if (data.today.date !== todayString()) {
     data.today = { date: todayString(), newStudied: {} };
-    saveData();
+    // Nur lokal speichern: Der Tageswechsel ist keine echte Änderung und darf beim
+    // Sync nicht einen neueren Stand vom anderen Gerät überschreiben.
+    writeLocal();
   }
 }
 
@@ -1120,8 +1174,10 @@ $('name-form').addEventListener('submit', event => {
 });
 
 // ⋮-Menü: actions ist eine Liste von { label, run, danger }
-function openMenu(title, actions) {
+function openMenu(title, actions, text) {
   $('menu-title').textContent = title;
+  $('menu-text').textContent = text || '';
+  $('menu-text').classList.toggle('hidden', !text);
   const box = $('menu-buttons');
   box.innerHTML = '';
   for (const action of actions) {
@@ -1805,7 +1861,9 @@ function openSettings() {
   $('setting-new-per-day').value = data.settings.newPerDay;
   $('settings-error').textContent = '';
   $('backup-error').textContent = '';
+  $('sync-error').textContent = '';
   renderBackupInfo();
+  renderSyncStatus();
   showScreen('settings');
 }
 
@@ -1915,6 +1973,315 @@ $('backup-file').addEventListener('change', () => {
   reader.readAsText(file);
 });
 
+// --- Sync über GitHub ---
+//
+// Die Daten liegen zusätzlich als Datei in einem geheimen "Gist" auf GitHub.
+// Jedes Gerät vergleicht seinen Stand mit dem Online-Stand über updatedAt:
+//   online neuer → herunterladen,  lokal neuer → hochladen.
+// Token und Gist-ID liegen nur auf diesem Gerät (nicht in den Daten, nicht im Backup).
+
+const SYNC_KEY = STORAGE_KEY + '_sync';
+const GIST_FILE = 'vokabelApp-daten.json';
+
+let sync = loadSync();    // { token, gistId, lastSync }
+let syncBusy = false;     // läuft gerade ein Abgleich?
+let syncAgain = false;    // währenddessen kam eine neue Änderung → danach nochmal
+let syncTimer = null;     // Wartezeit vor dem Hochladen
+let syncState = 'idle';   // 'idle' | 'busy' | 'ok' | 'offline' | 'error'
+let syncMessage = '';
+
+function loadSync() {
+  try {
+    return JSON.parse(localStorage.getItem(SYNC_KEY)) || {};
+  } catch (e) {
+    return {};
+  }
+}
+
+function saveSync() {
+  localStorage.setItem(SYNC_KEY, JSON.stringify(sync));
+}
+
+function isConnected() {
+  return Boolean(sync.token);
+}
+
+function isEmpty(d) {
+  return d.subjects.length === 0 && d.cards.length === 0;
+}
+
+// Fehler mit einer "Art", damit wir unterschiedlich reagieren können
+function syncError(message, kind) {
+  const error = new Error(message);
+  error.kind = kind;
+  return error;
+}
+
+// Eine Anfrage an die GitHub-Schnittstelle (API) schicken.
+// "async" heißt: Die Funktion wartet mit "await" auf die Antwort aus dem Internet,
+// ohne dass die App solange einfriert.
+async function github(token, path, method, body) {
+  const options = {
+    method: method || 'GET',
+    headers: { 'Accept': 'application/vnd.github+json', 'Authorization': 'Bearer ' + token }
+  };
+  if (body) {
+    options.body = JSON.stringify(body);
+    options.headers['Content-Type'] = 'application/json';
+    // keepalive: Anfrage läuft weiter, auch wenn die App gerade geschlossen wird (nur bis 64 KB)
+    options.keepalive = options.body.length < 60000;
+  }
+
+  let response;
+  try {
+    response = await fetch('https://api.github.com' + path, options);
+  } catch (e) {
+    throw syncError('Keine Verbindung zu GitHub – wird nachgeholt, sobald du wieder online bist.', 'offline');
+  }
+  if (response.status === 401) throw syncError('Der Token ist ungültig oder abgelaufen.', 'auth');
+  if (response.status === 403) throw syncError('GitHub verweigert den Zugriff. Hat der Token bei „Gists“ das Recht „Read and write“?', 'auth');
+  if (response.status === 404) throw syncError('Nicht gefunden.', 'notfound');
+  if (!response.ok) throw syncError('GitHub meldet einen Fehler (' + response.status + '). Versuch es später nochmal.', 'server');
+  return response.json();
+}
+
+// Unter allen Gists des Kontos den mit unserer Datei suchen
+async function findGist(token) {
+  const gists = await github(token, '/gists?per_page=100');
+  const found = gists.find(gist => gist.files && gist.files[GIST_FILE]);
+  return found ? found.id : null;
+}
+
+// Online-Stand lesen
+async function readGist(token, gistId) {
+  const gist = await github(token, '/gists/' + gistId);
+  const file = gist.files[GIST_FILE];
+  if (!file) return null;
+  let content = file.content;
+  if (file.truncated) {
+    // Große Dateien liefert GitHub nicht direkt mit – dann extra herunterladen
+    try {
+      content = await (await fetch(file.raw_url)).text();
+    } catch (e) {
+      throw syncError('Keine Verbindung zu GitHub – wird nachgeholt.', 'offline');
+    }
+  }
+  try {
+    return JSON.parse(content);
+  } catch (e) {
+    throw syncError('Die Online-Daten sind beschädigt.', 'data');
+  }
+}
+
+// Lokalen Stand hochladen (Gist anlegen, falls es noch keinen gibt). Gibt die Gist-ID zurück.
+async function writeGist(token, gistId) {
+  const files = { [GIST_FILE]: { content: JSON.stringify(data) } };
+  if (gistId) {
+    await github(token, '/gists/' + gistId, 'PATCH', { files: files });
+    return gistId;
+  }
+  const created = await github(token, '/gists', 'POST', {
+    description: 'Vokabel-App – Daten (automatisch synchronisiert)',
+    public: false, // geheimer Gist
+    files: files
+  });
+  return created.id;
+}
+
+// Online-Stand übernehmen
+function applyRemote(remote) {
+  if (!remote || !Array.isArray(remote.decks) || !Array.isArray(remote.cards)) {
+    throw syncError('Die Online-Daten sind beschädigt.', 'data');
+  }
+  migrate(remote);
+  if (!remote.settings) remote.settings = { newPerDay: 20 };
+  if (!remote.today) remote.today = { date: todayString(), newStudied: {} };
+
+  // Sicherheitskopie des bisherigen Stands auf diesem Gerät
+  localStorage.setItem(STORAGE_KEY + '_vorSync', JSON.stringify(data));
+  data = remote;
+  writeLocal(); // ohne neuen Zeitstempel – sonst sähe der Stand gleich wieder "neuer" aus
+
+  const screen = currentScreen();
+  if (screen === 'home' || screen === 'subject' || screen === 'deck') refresh();
+}
+
+// Der eigentliche Abgleich
+async function syncNow() {
+  if (!isConnected()) return;
+  if (syncBusy) { syncAgain = true; return; }
+  syncBusy = true;
+  clearTimeout(syncTimer);
+  syncTimer = null;
+  setSyncStatus('busy');
+
+  try {
+    let remote = null;
+    if (sync.gistId) {
+      try {
+        remote = await readGist(sync.token, sync.gistId);
+      } catch (e) {
+        if (e.kind !== 'notfound') throw e;
+        sync.gistId = null; // Gist wurde gelöscht → neu suchen bzw. anlegen
+      }
+    }
+    if (!sync.gistId) {
+      sync.gistId = await findGist(sync.token);
+      if (sync.gistId) remote = await readGist(sync.token, sync.gistId);
+    }
+
+    // ISO-Zeitstempel kann man als Text vergleichen: später = "größer"
+    const remoteTime = (remote && remote.updatedAt) || '';
+    const localTime = data.updatedAt || '';
+
+    if (remote && remoteTime > localTime) {
+      // Während des Lernens nichts austauschen – sonst passt die Warteschlange nicht mehr
+      if (currentScreen() !== 'study') {
+        applyRemote(remote);
+        showToast('Neuester Stand geladen');
+      }
+    } else if (!remote || localTime > remoteTime) {
+      sync.gistId = await writeGist(sync.token, sync.gistId);
+    }
+
+    sync.lastSync = new Date().toISOString();
+    saveSync();
+    setSyncStatus('ok');
+  } catch (e) {
+    setSyncStatus(e.kind === 'offline' ? 'offline' : 'error', e.message);
+  } finally {
+    syncBusy = false;
+    if (syncAgain) {
+      syncAgain = false;
+      syncNow();
+    }
+  }
+}
+
+// Nach einer Änderung 3 Sekunden warten, dann hochladen.
+// Bewertest du mehrere Karten schnell hintereinander, wird nur einmal hochgeladen.
+function schedulePush() {
+  if (!isConnected()) return;
+  clearTimeout(syncTimer);
+  syncTimer = setTimeout(syncNow, 3000);
+}
+
+// "um 15:42" bzw. "am 19.11. um 15:42"
+function syncTimeText(iso) {
+  const date = new Date(iso);
+  const time = 'um ' + clockTime(date);
+  if (formatDate(date) === todayString()) return time;
+  return 'am ' + date.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' }) + ' ' + time;
+}
+
+function setSyncStatus(state, message) {
+  syncState = state;
+  syncMessage = message || '';
+  renderSyncStatus();
+}
+
+// Anzeige in den Einstellungen und in der Fußzeile aktualisieren
+function renderSyncStatus() {
+  const connected = isConnected();
+  $('sync-off').classList.toggle('hidden', connected);
+  $('sync-on').classList.toggle('hidden', !connected);
+  $('footer-sync').classList.toggle('hidden', !connected);
+  if (!connected) return;
+
+  let text;
+  if (syncState === 'busy') text = '☁️ Synchronisiere …';
+  else if (syncState === 'offline') text = '⚠️ Offline – wird nachgeholt';
+  else if (syncState === 'error') text = '⚠️ Sync-Fehler: ' + syncMessage;
+  else if (sync.lastSync) text = '☁️ Synchronisiert ' + syncTimeText(sync.lastSync);
+  else text = '☁️ Verbunden';
+
+  $('sync-status').textContent = text;
+  $('footer-sync').textContent = syncState === 'error' ? '⚠️ Sync-Fehler – siehe Einstellungen' : text;
+}
+
+// Einrichten mit einem neuen Token
+async function connectSync() {
+  const token = $('sync-token').value.trim();
+  $('sync-error').textContent = '';
+  if (!token) {
+    $('sync-error').textContent = 'Bitte füge zuerst deinen Token ein.';
+    return;
+  }
+  const button = $('btn-sync-connect');
+  button.disabled = true;
+  button.textContent = 'Verbinde …';
+
+  // Wird aufgerufen, sobald feststeht, welcher Stand gelten soll
+  async function finish(gistId, remote, useRemote) {
+    sync = { token: token, gistId: gistId };
+    if (useRemote) applyRemote(remote);
+    else sync.gistId = await writeGist(token, gistId);
+    sync.lastSync = new Date().toISOString();
+    saveSync();
+    $('sync-token').value = '';
+    setSyncStatus('ok');
+    showToast('Sync eingerichtet');
+  }
+
+  function showError(e) {
+    sync = {};
+    $('sync-error').textContent = e.message;
+  }
+
+  try {
+    const gistId = await findGist(token);
+    const remote = gistId ? await readGist(token, gistId) : null;
+
+    if (!remote) {
+      await finish(gistId, null, false);          // noch nichts online → hochladen
+    } else if (isEmpty(data)) {
+      await finish(gistId, remote, true);         // dieses Gerät ist leer → herunterladen
+    } else {
+      // Beide Seiten haben Daten → du entscheidest
+      const when = remote.updatedAt
+        ? new Date(remote.updatedAt).toLocaleString('de-DE', { dateStyle: 'medium', timeStyle: 'short' })
+        : 'unbekannt';
+      openMenu('Online-Stand gefunden', [
+        { label: '☁️ Online-Stand laden (' + cardWord(remote.cards.length) + ')',
+          run: () => finish(gistId, remote, true).catch(showError) },
+        { label: '📤 Stand dieses Geräts hochladen (' + cardWord(data.cards.length) + ')',
+          run: () => finish(gistId, remote, false).catch(showError) }
+      ], 'Auf GitHub liegen schon Daten (Stand: ' + when + '). Welcher Stand soll gelten? ' +
+         'Der andere wird ersetzt.');
+    }
+  } catch (e) {
+    showError(e);
+  } finally {
+    button.disabled = false;
+    button.textContent = 'Verbinden';
+  }
+}
+
+function disconnectSync() {
+  const ok = confirm('Sync auf diesem Gerät trennen?\n' +
+                     'Deine Daten bleiben auf diesem Gerät und online bei GitHub erhalten.');
+  if (!ok) return;
+  clearTimeout(syncTimer);
+  sync = {};
+  saveSync();
+  setSyncStatus('idle');
+  showToast('Sync getrennt');
+}
+
+// Wenn die App in den Hintergrund geht: ausstehende Änderungen sofort hochladen.
+// Wenn sie wieder sichtbar wird: nachsehen, ob ein anderes Gerät etwas geändert hat.
+document.addEventListener('visibilitychange', () => {
+  if (!isConnected()) return;
+  if (document.visibilityState === 'hidden') {
+    if (syncTimer) syncNow();
+  } else if (currentScreen() !== 'study') {
+    syncNow();
+  }
+});
+
+// Internet wieder da → nachholen
+window.addEventListener('online', syncNow);
+
 // --- Buttons mit ihren Aktionen verbinden ---
 
 $('btn-back').addEventListener('click', goBack);
@@ -1951,6 +2318,9 @@ $('btn-import-cancel').addEventListener('click', () => {
 
 $('btn-save-settings').addEventListener('click', saveSettings);
 $('btn-export').addEventListener('click', exportBackup);
+$('btn-sync-connect').addEventListener('click', connectSync);
+$('btn-sync-now').addEventListener('click', syncNow);
+$('btn-sync-disconnect').addEventListener('click', disconnectSync);
 
 // Alle "Abbrechen"-Buttons schließen ihren Dialog
 document.querySelectorAll('[data-close]').forEach(button => {
@@ -1965,6 +2335,8 @@ document.querySelectorAll('[data-close]').forEach(button => {
 document.documentElement.style.setProperty('--logo-url', 'url("' + document.querySelector('.logo').src + '")');
 
 showHome();
+renderSyncStatus();
+syncNow(); // beim Start einmal abgleichen
 </script>
 </body>
 </html>
