@@ -1,0 +1,1970 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<!-- Sorgt dafür, dass die Seite auf dem Handy in richtiger Größe angezeigt wird -->
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vokabeln</title>
+
+<style>
+/* =========================================================
+   CSS – das Aussehen
+   Farben stehen einmal oben als Variablen und werden unten
+   wiederverwendet. So lässt sich das Design leicht ändern.
+   ========================================================= */
+:root {
+  --bg: #f2f5fa;
+  --card: #ffffff;
+  --text: #1a2233;
+  --muted: #5f6878;
+  --accent: #004d9d;        /* Königsblau, wie im Logo */
+  --accent-light: #e0eaf6;  /* helles Blau für Zweit-Buttons und Zähler */
+  --danger: #b3412f;
+  --danger-light: #f6e3df;
+  --due: #8a4b08;
+  --due-light: #fdebd3;
+  --border: #d6dde9;
+  --radius: 14px;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 17px;
+  line-height: 1.4;
+}
+
+/* Kopfzeile bleibt beim Scrollen oben stehen */
+header {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  min-height: 60px;
+  background: var(--accent);
+  color: #fff;
+}
+header h1 {
+  flex: 1;
+  margin: 0;
+  font-size: 1.2rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Logo oben rechts */
+.logo {
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+}
+
+main {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 16px;
+}
+
+/* Elemente mit der Klasse "hidden" werden ausgeblendet */
+.hidden { display: none !important; }
+
+/* Buttons: mindestens 48 px hoch, damit man sie gut mit dem Finger trifft */
+button {
+  font: inherit;
+  border: none;
+  border-radius: var(--radius);
+  padding: 12px 18px;
+  min-height: 48px;
+  cursor: pointer;
+}
+.btn-primary   { background: var(--accent); color: #fff; }
+.btn-secondary { background: var(--accent-light); color: var(--accent); }
+.btn-danger    { background: var(--danger-light); color: var(--danger); }
+.btn-full      { width: 100%; }
+.btn-back {
+  background: transparent;
+  color: #fff;
+  font-size: 1.4rem;
+  padding: 6px 12px;
+  min-height: 44px;
+}
+
+/* Listen (Decks und Karten) */
+.list {
+  list-style: none;
+  margin: 16px 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.deck-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  text-align: left;
+  background: var(--card);
+  border: 1px solid var(--border);
+}
+.deck-item .name {
+  flex: 1;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.counts { display: flex; flex-wrap: wrap; gap: 6px; font-size: 0.85rem; } /* Zähler dürfen umbrechen */
+.badge {
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--accent-light);
+  color: var(--accent);
+  white-space: nowrap;
+}
+.badge.due { background: var(--due-light); color: var(--due); }
+.badge.muted { background: #eceff4; color: var(--muted); }
+
+.card-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 8px 10px 16px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.card-item .texts { flex: 1; min-width: 0; }
+.card-item .front { font-weight: 600; }
+.card-item .back  { color: var(--muted); }
+.card-item .front,
+.card-item .back  { overflow-wrap: anywhere; white-space: pre-wrap; }
+
+.icon-btn {
+  background: transparent;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 8px;
+  font-size: 1.15rem;
+}
+
+.empty { color: var(--muted); text-align: center; padding: 24px 8px; }
+.info  { color: var(--muted); font-size: 0.9rem; margin: 8px 0 0; }
+
+/* Werkzeugleiste in der Deck-Ansicht: auf dem Handy volle Breite */
+.toolbar { display: flex; flex-wrap: wrap; gap: 10px; }
+.toolbar button { flex: 1 1 auto; }
+.toolbar .btn-menu { flex: 0 0 auto; } /* ⋮ bleibt schmal */
+
+input[type="text"],
+input[type="search"],
+input[type="number"],
+select,
+textarea {
+  width: 100%;
+  font: inherit;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #fff;
+}
+textarea { min-height: 90px; resize: vertical; }
+.search { margin-top: 16px; }
+
+/* Dialoge (Overlay-Fenster) */
+dialog {
+  width: min(520px, calc(100% - 24px));
+  padding: 0;
+  border: none;
+  border-radius: var(--radius);
+}
+dialog::backdrop { background: rgba(0, 0, 0, 0.4); }
+dialog form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 20px;
+}
+dialog h2 { margin: 0 0 4px; font-size: 1.2rem; }
+label { font-weight: 600; font-size: 0.95rem; }
+.error { color: var(--danger); font-size: 0.9rem; min-height: 1.2em; margin: 0; }
+.dialog-buttons { display: flex; gap: 10px; justify-content: flex-end; }
+.dialog-buttons button { flex: 1; }
+
+/* Startseite: Deck-Zeile mit "Lernen"-Button daneben */
+.deck-row { display: flex; gap: 8px; align-items: stretch; }
+/* Name oben, Zähler darunter – so bleibt auf dem Handy genug Platz für den Namen */
+.deck-row .deck-item { flex: 1; min-width: 0; flex-direction: column; align-items: flex-start; gap: 6px; }
+.deck-row .deck-item .name { overflow-wrap: break-word; max-width: 100%; }
+.btn-learn { flex-shrink: 0; }
+button:disabled { opacity: 0.45; cursor: default; }
+.btn-settings { margin-top: 8px; }
+.card-item .status { font-size: 0.8rem; color: var(--muted); margin-top: 2px; }
+
+/* Lernmodus: die Karteikarte */
+.flashcard {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 16px;
+  min-height: 220px;
+  margin: 12px 0 16px;
+  padding: 28px 20px;
+  text-align: center;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.flashcard .side { font-size: 1.5rem; overflow-wrap: anywhere; white-space: pre-wrap; }
+.flashcard .side.back { color: var(--accent); }
+.flashcard hr { width: 100%; margin: 0; border: none; border-top: 1px solid var(--border); }
+
+/* Die vier Bewertungs-Buttons: auf dem Handy 2 × 2, am PC 4 nebeneinander */
+.ratings { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.ratings button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-height: 64px;
+  font-weight: 600;
+}
+.ratings small { font-weight: 400; font-size: 0.8rem; opacity: 0.85; }
+.rate-again { background: var(--danger-light); color: var(--danger); }
+.rate-hard  { background: var(--due-light); color: var(--due); }
+.rate-good  { background: rgba(0, 77, 157, 0.15); color: var(--accent); } /* Königsblau, durchsichtig */
+.rate-easy  { background: #e1f2e6; color: #1f6b3a; }
+
+.done { text-align: center; padding: 32px 8px; }
+.done p { font-size: 1.2rem; }
+
+/* Einstellungen */
+/* Logo als dezentes Wasserzeichen im Hintergrund.
+   ::before erzeugt ein zusätzliches, unsichtbares Element vor dem Seiteninhalt.
+   Das Bild kommt per JavaScript in die Variable --logo-url (siehe START unten). */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;              /* über den ganzen Bildschirm */
+  z-index: -1;           /* hinter allem anderen */
+  background-image: var(--logo-url);
+  background-repeat: no-repeat;
+  background-position: center 60%;
+  background-size: min(80vw, 480px);
+  opacity: 0.05;         /* 5 % Deckkraft – nur ganz leicht zu sehen */
+  pointer-events: none;  /* Klicks gehen durch */
+}
+
+.setting {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+/* ⋮-Button und Deck-Menü */
+.btn-menu {
+  flex-shrink: 0;
+  min-width: 48px;
+  padding: 8px;
+  font-size: 1.4rem;
+  line-height: 1;
+  background: var(--accent-light);
+  color: var(--accent);
+}
+.menu-buttons { display: flex; flex-direction: column; gap: 10px; }
+.btn-import { margin-top: 10px; }
+
+/* Import */
+.import-box { display: flex; flex-direction: column; gap: 10px; }
+#import-text { min-height: 160px; font-family: ui-monospace, Consolas, monospace; font-size: 0.9rem; }
+/* Ein <label>, das wie ein Button aussieht – ein Klick darauf öffnet die Dateiauswahl */
+.file-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  padding: 12px 18px;
+  border-radius: var(--radius);
+  font-weight: 400;
+  cursor: pointer;
+}
+.import-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.import-row.dup { border-color: #e0b25c; background: #fff8ea; }  /* doppelt: orange */
+.import-row.bad { border-color: var(--danger); background: #fdf1ee; } /* leer/???: rot */
+.import-row.excluded { opacity: 0.55; }  /* Haken entfernt: blass */
+.import-row-head { display: flex; align-items: center; gap: 8px; }
+.import-row-head label { flex: 1; display: flex; align-items: center; gap: 8px; font-weight: 400; cursor: pointer; }
+.import-row input[type="checkbox"] { width: 22px; height: 22px; }
+.import-note { margin: 0; font-size: 0.85rem; }
+.import-row.dup .import-note { color: var(--due); }
+.import-row.bad .import-note { color: var(--danger); }
+
+/* Buttons unten bleiben beim Scrollen durch lange Listen sichtbar */
+.sticky-actions {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  gap: 10px;
+  padding: 12px 0;
+  background: var(--bg);
+}
+.sticky-actions button { flex: 1; }
+
+/* Kurze Meldung unten, verschwindet von selbst */
+#toast {
+  position: fixed;
+  left: 50%;
+  bottom: 96px; /* über den Buttons unten */
+  transform: translateX(-50%);
+  z-index: 20;
+  max-width: calc(100% - 32px);
+  padding: 12px 18px;
+  border-radius: 999px;
+  background: #1a2233;
+  color: #fff;
+  font-size: 0.95rem;
+  text-align: center;
+}
+
+.setting + .setting { margin-top: 16px; }
+.setting h2 { margin: 0; font-size: 1.1rem; }
+
+/* Ab 600 px Breite (Tablet/PC): Buttons nicht mehr gestreckt */
+@media (min-width: 600px) {
+  .ratings { grid-template-columns: repeat(4, 1fr); }
+  .toolbar button { flex: 0 0 auto; }
+  .dialog-buttons button { flex: 0 0 auto; }
+}
+</style>
+</head>
+
+<body>
+<!-- =========================================================
+     HTML – das Gerüst
+     Es gibt mehrere Bildschirme (<section>). Immer nur einer
+     ist sichtbar; die anderen haben die Klasse "hidden".
+     ========================================================= -->
+
+<header>
+  <button id="btn-back" class="btn-back hidden" aria-label="Zurück">←</button>
+  <h1 id="title">Vokabeln</h1>
+  <!-- Logo: als Text (Base64) direkt eingebettet, damit alles in einer Datei bleibt -->
+  <img class="logo" alt="Logo" src="data:image/webp;base64,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">
+</header>
+
+<main>
+  <!-- Bildschirm 1: Startseite mit allen Fächern -->
+  <section id="screen-home">
+    <button id="btn-new-subject" class="btn-primary btn-full">+ Neues Fach</button>
+    <button id="btn-import" class="btn-secondary btn-full btn-import">📥 Vokabeln importieren</button>
+    <ul id="subject-list" class="list"></ul>
+    <button id="btn-settings" class="btn-secondary btn-full btn-settings">⚙️ Einstellungen</button>
+  </section>
+
+  <!-- Bildschirm 2: ein Fach mit seinen Decks -->
+  <section id="screen-subject" class="hidden">
+    <div class="toolbar">
+      <button id="btn-study-subject" class="btn-primary">Alle lernen</button>
+      <button id="btn-new-deck" class="btn-secondary">+ Neues Deck</button>
+      <button id="btn-import-subject" class="btn-secondary">📥 Importieren</button>
+      <button id="btn-subject-menu" class="btn-menu" aria-label="Weitere Aktionen">⋮</button>
+    </div>
+    <ul id="deck-list" class="list"></ul>
+  </section>
+
+  <!-- Bildschirm 3: ein Deck mit seinen Karten -->
+  <section id="screen-deck" class="hidden">
+    <div class="toolbar">
+      <button id="btn-study-deck" class="btn-primary">Lernen</button>
+      <button id="btn-new-card" class="btn-secondary">+ Neue Karte</button>
+      <button id="btn-deck-menu" class="btn-menu" aria-label="Weitere Aktionen">⋮</button>
+    </div>
+    <input id="card-search" class="search" type="search" placeholder="Karten durchsuchen …">
+    <p id="card-count" class="info"></p>
+    <ul id="card-list" class="list"></ul>
+  </section>
+
+  <!-- Bildschirm 4: Lernmodus -->
+  <section id="screen-study" class="hidden">
+    <div id="study-area">
+      <p id="study-progress" class="info"></p>
+      <div class="flashcard">
+        <div id="study-front" class="side"></div>
+        <hr id="study-divider">
+        <div id="study-back" class="side back"></div>
+      </div>
+      <button id="btn-show-answer" class="btn-primary btn-full">Antwort zeigen</button>
+      <!-- data-q = SM-2-Note des Buttons; <small> zeigt das nächste Intervall -->
+      <div id="rating-buttons" class="ratings">
+        <button class="rate-again" data-q="0">Nochmal<small></small></button>
+        <button class="rate-hard"  data-q="3">Schwer<small></small></button>
+        <button class="rate-good"  data-q="4">Gut<small></small></button>
+        <button class="rate-easy"  data-q="5">Einfach<small></small></button>
+      </div>
+    </div>
+    <div id="study-done" class="done hidden">
+      <p id="study-done-text"></p>
+      <button id="btn-study-done" class="btn-primary">Zurück</button>
+    </div>
+  </section>
+
+  <!-- Bildschirm 5: Import -->
+  <section id="screen-import" class="hidden">
+    <!-- Teil 1: JSON einfügen oder Datei wählen -->
+    <div id="import-input" class="import-box">
+      <label for="import-text">JSON einfügen</label>
+      <textarea id="import-text" spellcheck="false"
+        placeholder='{"subject": "Spanisch", "deck": "Lektion 1", "cards": [{"front": "das Haus", "back": "la casa"}]}'></textarea>
+      <label for="import-file" class="btn-secondary file-button">📄 oder .json-Datei auswählen</label>
+      <input id="import-file" type="file" accept=".json,application/json" class="hidden">
+      <p id="import-error" class="error"></p>
+      <button id="btn-parse" class="btn-primary btn-full">Einlesen</button>
+    </div>
+
+    <!-- Teil 2: bearbeitbare Vorschau -->
+    <div id="import-preview" class="hidden">
+      <div class="setting">
+        <label for="import-subject">Fach</label>
+        <!-- list="…" schlägt beim Tippen die vorhandenen Fächer vor -->
+        <input id="import-subject" type="text" list="subject-options" maxlength="100" autocomplete="off">
+        <datalist id="subject-options"></datalist>
+        <label for="import-deck">Deck</label>
+        <input id="import-deck" type="text" maxlength="100" autocomplete="off">
+        <p id="import-deck-info" class="info"></p>
+      </div>
+      <p id="import-summary" class="info"></p>
+      <ul id="import-list" class="list"></ul>
+      <p id="import-save-error" class="error"></p>
+      <div class="sticky-actions">
+        <button id="btn-import-cancel" class="btn-secondary">Zurück</button>
+        <button id="btn-import-save" class="btn-primary">Übernehmen</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Bildschirm 6: Einstellungen -->
+  <section id="screen-settings" class="hidden">
+    <div class="setting">
+      <h2>Lernen</h2>
+      <label for="setting-new-per-day">Neue Karten pro Tag (je Deck)</label>
+      <input id="setting-new-per-day" type="number" min="0" max="999" inputmode="numeric">
+      <p class="info">So viele noch nie gelernte Karten kommen pro Deck und Tag dazu. Fällige Wiederholungen kommen immer dran.</p>
+      <p id="settings-error" class="error"></p>
+      <button id="btn-save-settings" class="btn-primary">Speichern</button>
+    </div>
+
+    <div class="setting">
+      <h2>Backup</h2>
+      <p class="info">Speichert alle Fächer, Decks, Karten und deinen Lernfortschritt in einer Datei.
+        Damit sicherst du deine Daten – oder überträgst sie auf ein anderes Gerät.</p>
+      <p id="backup-info" class="info"></p>
+      <button id="btn-export" class="btn-primary">💾 Backup herunterladen</button>
+      <label for="backup-file" class="btn-secondary file-button">📂 Backup wiederherstellen</label>
+      <input id="backup-file" type="file" accept=".json,application/json" class="hidden">
+      <p id="backup-error" class="error"></p>
+    </div>
+  </section>
+</main>
+
+<!-- Dialog: Namen eingeben (für neue/umbenannte Fächer und Decks) -->
+<dialog id="name-dialog">
+  <form id="name-form">
+    <h2 id="name-dialog-title"></h2>
+    <label for="name-input">Name</label>
+    <input id="name-input" type="text" maxlength="100" autocomplete="off">
+    <p id="name-error" class="error"></p>
+    <div class="dialog-buttons">
+      <button type="button" class="btn-secondary" data-close>Abbrechen</button>
+      <button type="submit" class="btn-primary">Speichern</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Dialog: ⋮-Menü (die Buttons darin werden per JavaScript erzeugt) -->
+<dialog id="menu-dialog">
+  <form>
+    <h2 id="menu-title"></h2>
+    <div id="menu-buttons" class="menu-buttons"></div>
+  </form>
+</dialog>
+
+<!-- Dialog: Deck in ein anderes Fach verschieben -->
+<dialog id="move-dialog">
+  <form id="move-form">
+    <h2>In anderes Fach verschieben</h2>
+    <label for="move-select">Fach</label>
+    <select id="move-select"></select>
+    <p id="move-error" class="error"></p>
+    <div class="dialog-buttons">
+      <button type="button" class="btn-secondary" data-close>Abbrechen</button>
+      <button type="submit" class="btn-primary">Verschieben</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Kurze Erfolgsmeldung -->
+<div id="toast" class="hidden" role="status"></div>
+
+<!-- Dialog: Karte anlegen oder bearbeiten -->
+<dialog id="card-dialog">
+  <form id="card-form">
+    <h2 id="card-dialog-title">Neue Karte</h2>
+    <label for="card-front">Vorderseite</label>
+    <textarea id="card-front"></textarea>
+    <label for="card-back">Rückseite</label>
+    <textarea id="card-back"></textarea>
+    <p id="card-error" class="error"></p>
+    <div class="dialog-buttons">
+      <button type="button" class="btn-secondary" data-close>Abbrechen</button>
+      <button type="submit" class="btn-primary">Speichern</button>
+    </div>
+  </form>
+</dialog>
+
+<script>
+/* =========================================================
+   JavaScript – die Logik
+   Grundregel der ganzen App:
+   Daten ändern  →  speichern  →  neu anzeigen
+
+   Aufbau der Daten:  Fach  →  Deck  →  Karte
+   (jedes Deck merkt sich sein Fach über subjectId,
+    jede Karte ihr Deck über deckId)
+   ========================================================= */
+
+
+/* ---------- 1. SPEICHER ---------------------------------- */
+
+// Unter diesem Namen liegen alle Daten im localStorage des Browsers
+const STORAGE_KEY = 'vokabelApp';
+
+// Datum als Text "JJJJ-MM-TT" (z. B. "2026-11-20").
+// Ohne Uhrzeit – so gibt es keine Zeitzonen-Probleme.
+function formatDate(d) {
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return d.getFullYear() + '-' + month + '-' + day;
+}
+
+function todayString() {
+  return formatDate(new Date());
+}
+
+// Tage zu einem Datumstext addieren: addDays("2026-11-30", 2) → "2026-12-02".
+// new Date(...) rechnet Monats- und Jahreswechsel automatisch richtig.
+function addDays(dateString, days) {
+  const [y, m, d] = dateString.split('-').map(Number);
+  return formatDate(new Date(y, m - 1, d + days));
+}
+
+// Zeitstempel → Uhrzeit "14:45" (für die Anzeige)
+function clockTime(timestamp) {
+  return new Date(timestamp).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+}
+
+// "2026-11-26" → "26.11.2026" (für die Anzeige)
+function germanDate(dateString) {
+  const [y, m, d] = dateString.split('-');
+  return d + '.' + m + '.' + y;
+}
+
+// Erzeugt eine eindeutige ID (Zeitstempel + Zufall)
+function newId() {
+  return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+}
+
+// So sehen die Daten aus, wenn die App zum ersten Mal startet
+function emptyData() {
+  return {
+    version: 2,
+    updatedAt: new Date().toISOString(),
+    settings: { newPerDay: 20 },
+    subjects: [],
+    decks: [],
+    cards: [],
+    today: { date: todayString(), newStudied: {} }
+  };
+}
+
+// Daten aus dem localStorage laden.
+// localStorage kann nur Text speichern – darum wandeln wir mit
+// JSON.parse den Text wieder in ein JavaScript-Objekt um.
+function loadData() {
+  const raw = localStorage.getItem(STORAGE_KEY);
+  if (!raw) return emptyData();
+  try {
+    return JSON.parse(raw);
+  } catch (e) {
+    // Defekte Daten nicht wegwerfen, sondern unter anderem Namen sichern
+    localStorage.setItem(STORAGE_KEY + '_defekt', raw);
+    alert('Die gespeicherten Daten waren beschädigt und wurden beiseitegelegt. Die App startet leer.');
+    return emptyData();
+  }
+}
+
+// Ältere Datenstände auf das aktuelle Format bringen.
+// Gibt true zurück, wenn etwas geändert wurde.
+function migrate(d) {
+  if (d.subjects) return false;
+  // Version 1 kannte noch keine Fächer:
+  // alle vorhandenen Decks kommen in ein Fach "Allgemein"
+  d.subjects = [];
+  if (d.decks.length > 0) {
+    const subject = { id: newId(), name: 'Allgemein', createdAt: new Date().toISOString() };
+    d.subjects.push(subject);
+    d.decks.forEach(deck => { deck.subjectId = subject.id; });
+  }
+  d.version = 2;
+  return true;
+}
+
+// Daten speichern: Objekt → Text (JSON.stringify) → localStorage.
+// updatedAt merkt sich den Zeitpunkt der letzten Änderung (für den späteren Sync).
+function saveData() {
+  data.updatedAt = new Date().toISOString();
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  } catch (e) {
+    alert('Speichern fehlgeschlagen. Ist der Speicher des Browsers voll?');
+  }
+}
+
+// Der aktuelle Zustand der App – wird beim Start einmal geladen
+let data = loadData();
+if (migrate(data)) saveData();
+
+// Hilfsfunktionen zum Finden, Sortieren und Zählen
+function findSubject(id) {
+  return data.subjects.find(subject => subject.id === id);
+}
+
+function findDeck(id) {
+  return data.decks.find(deck => deck.id === id);
+}
+
+function byName(a, b) {
+  return a.name.localeCompare(b.name, 'de'); // deutsche Sortierung mit Umlauten
+}
+
+function decksOfSubject(subjectId) {
+  return data.decks.filter(deck => deck.subjectId === subjectId).sort(byName);
+}
+
+function cardsOfDeck(deckId) {
+  return data.cards.filter(card => card.deckId === deckId);
+}
+
+// Für Namensvergleiche: Leerzeichen am Rand weg, alles klein
+function normalize(text) {
+  return text.trim().toLowerCase();
+}
+
+// Ist ein neuer Tag angebrochen? Dann den Zähler für neue Karten zurücksetzen.
+function ensureToday() {
+  if (data.today.date !== todayString()) {
+    data.today = { date: todayString(), newStudied: {} };
+    saveData();
+  }
+}
+
+// Wie viele neue Karten darf ich in diesem Deck heute noch lernen?
+function newLeftToday(deckId) {
+  const studied = data.today.newStudied[deckId] || 0;
+  return Math.max(0, data.settings.newPerDay - studied);
+}
+
+// Zählt pro Deck, was heute dran ist:
+// Neu = noch nie gelernt (due ist null) – aber höchstens so viele, wie das Tageslimit erlaubt.
+// Fällig = Fälligkeitsdatum ist heute oder früher.
+// (Datumstexte "JJJJ-MM-TT" kann man direkt mit <= vergleichen.)
+function countCards(deckId) {
+  const today = todayString();
+  let newCount = 0;
+  let dueCount = 0;
+  for (const card of cardsOfDeck(deckId)) {
+    if (card.due === null) newCount++;
+    else if (card.due <= today) dueCount++;
+  }
+  return { new: Math.min(newCount, newLeftToday(deckId)), due: dueCount };
+}
+
+// Zählt für ein ganzes Fach: Summe über alle seine Decks
+function countSubject(subjectId) {
+  const total = { new: 0, due: 0 };
+  for (const deck of decksOfSubject(subjectId)) {
+    const counts = countCards(deck.id);
+    total.new += counts.new;
+    total.due += counts.due;
+  }
+  return total;
+}
+
+// Eine neue Karte mit den Startwerten für die Lernlogik
+function createCard(deckId, front, back) {
+  return {
+    id: newId(),
+    deckId: deckId,
+    front: front,
+    back: back,
+    reps: 0,         // wie oft hintereinander richtig
+    interval: 0,     // Abstand bis zur nächsten Wiederholung (Tage)
+    ease: 2.5,       // Ease-Faktor: wie "leicht" die Karte ist
+    due: null,       // Fälligkeitsdatum; null = neue Karte
+    lapses: 0,       // wie oft vergessen
+    learning: false, // true = in der Lernphase (Wiederholung nach Minuten)
+    dueAt: null,     // nur in der Lernphase: Zeitpunkt (ms), ab dem die Karte wieder drankommt
+    createdAt: new Date().toISOString()
+  };
+}
+
+
+/* ---------- 2. LERNLOGIK (SM-2 mit Lernphase wie bei Anki) -- */
+// SM-2 arbeitet mit Noten von 0 bis 5. Unsere Buttons:
+// Nochmal = 0, Schwer = 3, Gut = 4, Einfach = 5
+//
+// Jede Karte ist in einer von zwei Phasen:
+// • Lernphase (neue oder vergessene Karten): Wiederholung nach Minuten.
+//     Nochmal → 5 Min., Schwer → 10 Min., Gut → 1 Tag, Einfach → 4 Tage.
+//     Erst mit Gut oder Einfach verlässt die Karte die Lernphase.
+// • Wiederholungsphase: Abstände in Tagen nach SM-2.
+//     Nochmal → Karte gilt als vergessen und geht zurück in die Lernphase.
+
+const AGAIN_MINUTES = 5;
+const HARD_MINUTES = 10;
+const EASY_DAYS = 4;
+
+// SM-2-Formel für den Ease-Faktor (Schwer senkt ihn, Gut hält ihn, Einfach erhöht ihn)
+function newEase(ease, q) {
+  ease = ease + (0.1 - (5 - q) * (0.08 + (5 - q) * 0.02));
+  if (ease < 1.3) ease = 1.3;
+  return Math.round(ease * 100) / 100;
+}
+
+// Berechnet, wie es mit einer Karte bei Note q weitergeht.
+// Die Karte selbst wird hier NICHT verändert – so können wir die
+// Funktion auch für die Vorschau unter den Buttons benutzen.
+// Ergebnis: learning + minutes (Lernphase) oder interval in Tagen (Wiederholungsphase).
+function nextState(card, q) {
+  const result = {
+    reps: card.reps, interval: card.interval, ease: card.ease,
+    learning: false, minutes: null, lapse: false
+  };
+  const inLearning = card.due === null || card.learning;
+
+  if (inLearning) {
+    if (q === 0 || q === 3) {
+      // Nochmal / Schwer: in der Lernphase bleiben, gleich nochmal
+      result.learning = true;
+      result.minutes = q === 0 ? AGAIN_MINUTES : HARD_MINUTES;
+    } else {
+      // Gut / Einfach: Lernphase geschafft → ab jetzt Abstände in Tagen
+      result.reps = 1;
+      result.interval = q === 4 ? 1 : EASY_DAYS;
+      result.ease = newEase(card.ease, q);
+    }
+    return result;
+  }
+
+  // Wiederholungsphase
+  if (q === 0) {
+    // Vergessen: zurück in die Lernphase, Wiederholungen beginnen von vorn.
+    // Der Ease-Faktor bleibt laut SM-2 unverändert.
+    result.learning = true;
+    result.minutes = AGAIN_MINUTES;
+    result.reps = 0;
+    result.interval = 0;
+    result.lapse = true;
+    return result;
+  }
+  // Gewusst: SM-2 – erst 1 Tag, dann 6 Tage, dann jeweils × Ease-Faktor
+  result.ease = newEase(card.ease, q);
+  result.reps = card.reps + 1;
+  if (result.reps === 1) result.interval = 1;
+  else if (result.reps === 2) result.interval = 6;
+  else result.interval = Math.round(card.interval * result.ease);
+  return result;
+}
+
+// Bewertung wirklich auf die Karte anwenden und speichern
+function applyRating(card, q) {
+  const wasNew = card.due === null;
+  const result = nextState(card, q);
+
+  if (result.lapse) card.lapses++;
+  card.reps = result.reps;
+  card.interval = result.interval;
+  card.ease = result.ease;
+  card.learning = result.learning;
+
+  if (result.learning) {
+    card.due = todayString();                         // zählt heute als fällig
+    card.dueAt = Date.now() + result.minutes * 60000; // 60000 ms = 1 Minute
+  } else {
+    card.due = addDays(todayString(), result.interval);
+    card.dueAt = null;
+  }
+
+  // Neue Karten für das Tageslimit mitzählen
+  if (wasNew) {
+    data.today.newStudied[card.deckId] = (data.today.newStudied[card.deckId] || 0) + 1;
+  }
+  saveData();
+}
+
+// Text für die Vorschau unter einem Button, z. B. "10 Min." oder "6 Tage"
+function intervalText(card, q) {
+  const result = nextState(card, q);
+  if (result.learning) return result.minutes + ' Min.';
+  const days = result.interval;
+  if (days === 1) return '1 Tag';
+  if (days < 60) return days + ' Tage';
+  if (days < 365) return (days / 30).toFixed(1).replace('.', ',') + ' Mon.';
+  return '≈ ' + (days / 365).toFixed(1).replace('.', ',') + ' J.';
+}
+
+
+/* ---------- 3. ANZEIGE ----------------------------------- */
+
+// Kurzschreibweise: Element per ID holen
+function $(id) {
+  return document.getElementById(id);
+}
+
+// Erstellt ein HTML-Element mit Klasse und Text.
+// Wichtig: textContent statt innerHTML – so wird eingegebener Text
+// nie als HTML-Code ausgeführt (Schutz vor kaputter Anzeige).
+function el(tag, className, text) {
+  const element = document.createElement(tag);
+  if (className) element.className = className;
+  if (text !== undefined) element.textContent = text;
+  return element;
+}
+
+// "1 Karte", aber "2 Karten" – und dasselbe für Decks
+function cardWord(n) {
+  return n === 1 ? '1 Karte' : n + ' Karten';
+}
+function deckWord(n) {
+  return n === 1 ? '1 Deck' : n + ' Decks';
+}
+
+// Was gerade offen ist (null = nichts ausgewählt)
+let currentSubjectId = null;
+let currentDeckId = null;
+
+const SCREENS = ['home', 'subject', 'deck', 'study', 'import', 'settings'];
+
+// Einen Bildschirm zeigen, alle anderen ausblenden
+function showScreen(name) {
+  for (const screen of SCREENS) {
+    $('screen-' + screen).classList.toggle('hidden', screen !== name);
+  }
+  $('btn-back').classList.toggle('hidden', name === 'home');
+  window.scrollTo(0, 0);
+}
+
+// Welcher Bildschirm ist gerade sichtbar?
+function currentScreen() {
+  return SCREENS.find(screen => !$('screen-' + screen).classList.contains('hidden'));
+}
+
+// Den sichtbaren Bildschirm neu zeichnen (nach Änderungen)
+function refresh() {
+  const screen = currentScreen();
+  if (screen === 'deck') renderDeck();
+  else if (screen === 'subject') renderSubject();
+  else renderHome();
+}
+
+// Eine Listen-Zeile für ein Fach oder ein Deck bauen:
+// Name + Zähler (antippen öffnet), daneben "Lernen" und ⋮
+function makeRow(name, counts, extraBadge, onOpen, onLearn, onMenu) {
+  const li = el('li', 'deck-row');
+
+  const button = el('button', 'deck-item');
+  button.appendChild(el('span', 'name', name));
+  const badges = el('span', 'counts');
+  if (extraBadge) badges.appendChild(el('span', 'badge muted', extraBadge));
+  badges.appendChild(el('span', 'badge', counts.new + ' neu'));
+  badges.appendChild(el('span', 'badge due', counts.due + ' fällig'));
+  button.appendChild(badges);
+  button.addEventListener('click', onOpen);
+  li.appendChild(button);
+
+  const learnButton = el('button', 'btn-primary btn-learn', 'Lernen');
+  learnButton.disabled = counts.new + counts.due === 0; // nichts zu tun → ausgegraut
+  learnButton.addEventListener('click', onLearn);
+  li.appendChild(learnButton);
+
+  const menuButton = el('button', 'btn-menu', '⋮');
+  menuButton.setAttribute('aria-label', 'Weitere Aktionen für ' + name);
+  menuButton.addEventListener('click', onMenu);
+  li.appendChild(menuButton);
+
+  return li;
+}
+
+// Startseite: alle Fächer
+function renderHome() {
+  ensureToday();
+  $('title').textContent = 'Vokabeln';
+  const list = $('subject-list');
+  list.innerHTML = ''; // alte Einträge entfernen
+
+  if (data.subjects.length === 0) {
+    list.appendChild(el('li', 'empty', 'Noch keine Fächer. Leg oben dein erstes Fach an – z. B. „Spanisch“.'));
+    return;
+  }
+
+  for (const subject of [...data.subjects].sort(byName)) {
+    list.appendChild(makeRow(
+      subject.name,
+      countSubject(subject.id),
+      deckWord(decksOfSubject(subject.id).length),
+      () => openSubject(subject.id),
+      () => startStudy('subject', subject.id),
+      () => openSubjectMenu(subject.id)
+    ));
+  }
+}
+
+// Fach-Ansicht: alle Decks eines Fachs
+function renderSubject() {
+  const subject = findSubject(currentSubjectId);
+  if (!subject) { showHome(); return; }
+  ensureToday();
+  $('title').textContent = subject.name;
+
+  const counts = countSubject(subject.id);
+  const toStudy = counts.new + counts.due;
+  $('btn-study-subject').textContent = 'Alle lernen (' + toStudy + ')';
+  $('btn-study-subject').disabled = toStudy === 0;
+
+  const list = $('deck-list');
+  list.innerHTML = '';
+  const decks = decksOfSubject(subject.id);
+
+  if (decks.length === 0) {
+    list.appendChild(el('li', 'empty', 'Dieses Fach hat noch keine Decks. Leg oben eins an oder importiere Vokabeln.'));
+    return;
+  }
+
+  for (const deck of decks) {
+    list.appendChild(makeRow(
+      deck.name,
+      countCards(deck.id),
+      null,
+      () => openDeck(deck.id),
+      () => startStudy('deck', deck.id),
+      () => openDeckMenu(deck.id)
+    ));
+  }
+}
+
+// Deck-Ansicht: Kartenliste des offenen Decks
+function renderDeck() {
+  const deck = findDeck(currentDeckId);
+  if (!deck) { showHome(); return; }
+
+  $('title').textContent = deck.name;
+
+  ensureToday();
+  const counts = countCards(deck.id);
+  const toStudy = counts.new + counts.due;
+  $('btn-study-deck').textContent = 'Lernen (' + toStudy + ')';
+  $('btn-study-deck').disabled = toStudy === 0;
+
+  const allCards = cardsOfDeck(deck.id);
+  const query = $('card-search').value.trim().toLowerCase();
+  const shown = query
+    ? allCards.filter(c => c.front.toLowerCase().includes(query) || c.back.toLowerCase().includes(query))
+    : allCards;
+
+  $('card-count').textContent = query
+    ? shown.length + ' von ' + cardWord(allCards.length)
+    : cardWord(allCards.length);
+
+  const list = $('card-list');
+  list.innerHTML = '';
+
+  if (allCards.length === 0) {
+    list.appendChild(el('li', 'empty', 'Dieses Deck ist noch leer.'));
+    return;
+  }
+  if (shown.length === 0) {
+    list.appendChild(el('li', 'empty', 'Keine Karte passt zur Suche.'));
+    return;
+  }
+
+  for (const card of shown) {
+    const li = el('li', 'card-item');
+    const texts = el('div', 'texts');
+    texts.appendChild(el('div', 'front', card.front));
+    texts.appendChild(el('div', 'back', card.back));
+    let status;
+    if (card.due === null) status = 'neu';
+    else if (card.learning) status = 'Lernphase – wieder ab ' + clockTime(card.dueAt);
+    else status = 'fällig am ' + germanDate(card.due);
+    texts.appendChild(el('div', 'status', status));
+    li.appendChild(texts);
+
+    const editButton = el('button', 'icon-btn', '✏️');
+    editButton.setAttribute('aria-label', 'Karte bearbeiten');
+    editButton.addEventListener('click', () => openCardDialog(card.id));
+    li.appendChild(editButton);
+
+    const deleteButton = el('button', 'icon-btn', '🗑️');
+    deleteButton.setAttribute('aria-label', 'Karte löschen');
+    deleteButton.addEventListener('click', () => deleteCard(card.id));
+    li.appendChild(deleteButton);
+
+    list.appendChild(li);
+  }
+}
+
+// Navigation zwischen den Bildschirmen
+function showHome() {
+  currentSubjectId = null;
+  currentDeckId = null;
+  showScreen('home');
+  renderHome();
+}
+
+function openSubject(subjectId) {
+  currentSubjectId = subjectId;
+  currentDeckId = null;
+  showScreen('subject');
+  renderSubject();
+}
+
+function openDeck(deckId) {
+  currentDeckId = deckId;
+  currentSubjectId = findDeck(deckId).subjectId;
+  $('card-search').value = '';
+  showScreen('deck');
+  renderDeck();
+}
+
+// Zurück-Pfeil: eine Ebene nach oben
+function goBack() {
+  const screen = currentScreen();
+  if (screen === 'deck') openSubject(currentSubjectId);
+  else if (screen === 'study') returnFromStudy();
+  else if ((screen === 'import' || screen === 'settings') && currentSubjectId) openSubject(currentSubjectId);
+  else showHome();
+}
+
+
+/* ---------- 4. EREIGNISSE (Aktionen) --------------------- */
+
+// --- Allgemeine Helfer ---
+
+// Kurze Meldung unten einblenden, die nach 2,5 Sekunden verschwindet
+let toastTimer = null;
+function showToast(text) {
+  $('toast').textContent = text;
+  $('toast').classList.remove('hidden');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => $('toast').classList.add('hidden'), 2500);
+}
+
+// Namens-Dialog für Fächer und Decks.
+// onSave bekommt den Namen und gibt bei einem Problem einen Fehlertext zurück.
+let nameDialogSave = null;
+
+function openNameDialog(title, value, onSave) {
+  nameDialogSave = onSave;
+  $('name-dialog-title').textContent = title;
+  $('name-input').value = value;
+  $('name-error').textContent = '';
+  $('name-dialog').showModal();
+  $('name-input').focus();
+}
+
+$('name-form').addEventListener('submit', event => {
+  event.preventDefault(); // verhindert, dass der Browser die Seite neu lädt
+  const name = $('name-input').value.trim();
+  if (!name) {
+    $('name-error').textContent = 'Bitte gib einen Namen ein.';
+    return;
+  }
+  const error = nameDialogSave(name);
+  if (error) {
+    $('name-error').textContent = error;
+    return;
+  }
+  saveData();
+  $('name-dialog').close();
+  refresh();
+});
+
+// ⋮-Menü: actions ist eine Liste von { label, run, danger }
+function openMenu(title, actions) {
+  $('menu-title').textContent = title;
+  const box = $('menu-buttons');
+  box.innerHTML = '';
+  for (const action of actions) {
+    const button = el('button', action.danger ? 'btn-danger' : 'btn-secondary', action.label);
+    button.type = 'button';
+    button.addEventListener('click', () => {
+      $('menu-dialog').close();
+      action.run();
+    });
+    box.appendChild(button);
+  }
+  const cancel = el('button', 'btn-secondary', 'Abbrechen');
+  cancel.type = 'button';
+  cancel.addEventListener('click', () => $('menu-dialog').close());
+  box.appendChild(cancel);
+  $('menu-dialog').showModal();
+}
+
+// Lernfortschritt von Karten zurücksetzen – die Vokabeln selbst bleiben
+function resetCards(cards, deckIds) {
+  for (const card of cards) {
+    // Object.assign überschreibt mehrere Felder auf einmal
+    Object.assign(card, { reps: 0, interval: 0, ease: 2.5, due: null, lapses: 0, learning: false, dueAt: null });
+  }
+  for (const deckId of deckIds) data.today.newStudied[deckId] = 0; // Tageslimit wieder frei
+  saveData();
+  refresh();
+  showToast('Fortschritt zurückgesetzt');
+}
+
+// --- Fächer ---
+
+// Fach-Namen sollen eindeutig sein (der Import findet Fächer über ihren Namen)
+function subjectNameTaken(name, ownId) {
+  return data.subjects.some(s => s.id !== ownId && normalize(s.name) === normalize(name));
+}
+
+function newSubject() {
+  openNameDialog('Neues Fach', '', name => {
+    if (subjectNameTaken(name, null)) return 'Ein Fach mit diesem Namen gibt es schon.';
+    data.subjects.push({ id: newId(), name: name, createdAt: new Date().toISOString() });
+  });
+}
+
+function openSubjectMenu(subjectId) {
+  const subject = findSubject(subjectId);
+  openMenu(subject.name, [
+    { label: '✏️ Umbenennen', run: () => openNameDialog('Fach umbenennen', subject.name, name => {
+        if (subjectNameTaken(name, subject.id)) return 'Ein Fach mit diesem Namen gibt es schon.';
+        subject.name = name;
+      }) },
+    { label: '↺ Fortschritt zurücksetzen', run: () => resetSubjectProgress(subject.id) },
+    { label: '🗑️ Fach löschen', danger: true, run: () => deleteSubject(subject.id) }
+  ]);
+}
+
+function resetSubjectProgress(subjectId) {
+  const subject = findSubject(subjectId);
+  const deckIds = decksOfSubject(subjectId).map(d => d.id);
+  const cards = data.cards.filter(c => deckIds.includes(c.deckId));
+  const ok = confirm('Lernfortschritt im ganzen Fach „' + subject.name + '“ zurücksetzen?\n' +
+                     'Danach gelten alle Karten (' + cardWord(cards.length) + ') wieder als neu. ' +
+                     'Die Vokabeln selbst bleiben erhalten.');
+  if (ok) resetCards(cards, deckIds);
+}
+
+function deleteSubject(subjectId) {
+  const subject = findSubject(subjectId);
+  const deckIds = decksOfSubject(subjectId).map(d => d.id);
+  const cardCount = data.cards.filter(c => deckIds.includes(c.deckId)).length;
+  const ok = confirm('Fach „' + subject.name + '“ mit ' + deckWord(deckIds.length) + ' und ' +
+                     cardWord(cardCount) + ' löschen?\nDas kann nicht rückgängig gemacht werden.');
+  if (!ok) return;
+  data.subjects = data.subjects.filter(s => s.id !== subjectId);
+  data.decks = data.decks.filter(d => d.subjectId !== subjectId);
+  data.cards = data.cards.filter(c => !deckIds.includes(c.deckId));
+  saveData();
+  showHome();
+}
+
+// --- Decks ---
+
+// Deck-Namen sollen innerhalb eines Fachs eindeutig sein
+function deckNameTaken(name, subjectId, ownId) {
+  return data.decks.some(d => d.subjectId === subjectId && d.id !== ownId && normalize(d.name) === normalize(name));
+}
+
+function newDeck() {
+  const subjectId = currentSubjectId;
+  openNameDialog('Neues Deck', '', name => {
+    if (deckNameTaken(name, subjectId, null)) return 'In diesem Fach gibt es schon ein Deck mit diesem Namen.';
+    data.decks.push({ id: newId(), subjectId: subjectId, name: name, createdAt: new Date().toISOString() });
+  });
+}
+
+function openDeckMenu(deckId) {
+  const deck = findDeck(deckId);
+  const actions = [
+    { label: '✏️ Umbenennen', run: () => openNameDialog('Deck umbenennen', deck.name, name => {
+        if (deckNameTaken(name, deck.subjectId, deck.id)) return 'In diesem Fach gibt es schon ein Deck mit diesem Namen.';
+        deck.name = name;
+      }) }
+  ];
+  // Verschieben nur anbieten, wenn es überhaupt ein anderes Fach gibt
+  if (data.subjects.length > 1) {
+    actions.push({ label: '📁 In anderes Fach verschieben', run: () => openMoveDialog(deck.id) });
+  }
+  actions.push({ label: '↺ Fortschritt zurücksetzen', run: () => resetDeckProgress(deck.id) });
+  actions.push({ label: '🗑️ Deck löschen', danger: true, run: () => deleteDeck(deck.id) });
+  openMenu(deck.name, actions);
+}
+
+function resetDeckProgress(deckId) {
+  const deck = findDeck(deckId);
+  const cards = cardsOfDeck(deckId);
+  const ok = confirm('Lernfortschritt von „' + deck.name + '“ zurücksetzen?\n' +
+                     'Danach gelten alle Karten (' + cardWord(cards.length) + ') wieder als neu. ' +
+                     'Die Vokabeln selbst bleiben erhalten.');
+  if (ok) resetCards(cards, [deckId]);
+}
+
+function deleteDeck(deckId) {
+  const deck = findDeck(deckId);
+  const count = cardsOfDeck(deck.id).length;
+  const ok = confirm('Deck „' + deck.name + '“ mit ' + cardWord(count) +
+                     ' löschen?\nDas kann nicht rückgängig gemacht werden.');
+  if (!ok) return;
+  // Deck und alle seine Karten entfernen
+  data.decks = data.decks.filter(d => d.id !== deck.id);
+  data.cards = data.cards.filter(c => c.deckId !== deck.id);
+  saveData();
+  openSubject(deck.subjectId);
+}
+
+// Deck verschieben: Auswahlliste mit allen Fächern füllen
+let moveDeckId = null;
+
+function openMoveDialog(deckId) {
+  moveDeckId = deckId;
+  const deck = findDeck(deckId);
+  const select = $('move-select');
+  select.innerHTML = '';
+  for (const subject of [...data.subjects].sort(byName)) {
+    const option = el('option', '', subject.name);
+    option.value = subject.id;
+    option.selected = subject.id === deck.subjectId;
+    select.appendChild(option);
+  }
+  $('move-error').textContent = '';
+  $('move-dialog').showModal();
+}
+
+$('move-form').addEventListener('submit', event => {
+  event.preventDefault();
+  const deck = findDeck(moveDeckId);
+  const targetId = $('move-select').value;
+  if (targetId !== deck.subjectId) {
+    if (deckNameTaken(deck.name, targetId, deck.id)) {
+      $('move-error').textContent = 'Im Fach „' + findSubject(targetId).name + '“ gibt es schon ein Deck „' + deck.name + '“.';
+      return;
+    }
+    deck.subjectId = targetId;
+    if (currentDeckId === deck.id) currentSubjectId = targetId; // Zurück führt dann ins neue Fach
+    saveData();
+    showToast('Verschoben nach „' + findSubject(targetId).name + '“');
+  }
+  $('move-dialog').close();
+  refresh();
+});
+
+// --- Karten ---
+
+let editingCardId = null; // null = neue Karte, sonst ID der Karte, die bearbeitet wird
+
+function openCardDialog(cardId) {
+  editingCardId = cardId || null;
+  const card = editingCardId ? data.cards.find(c => c.id === editingCardId) : null;
+  $('card-dialog-title').textContent = card ? 'Karte bearbeiten' : 'Neue Karte';
+  $('card-front').value = card ? card.front : '';
+  $('card-back').value = card ? card.back : '';
+  $('card-error').textContent = '';
+  $('card-dialog').showModal();
+  $('card-front').focus();
+}
+
+$('card-form').addEventListener('submit', event => {
+  event.preventDefault();
+  const front = $('card-front').value.trim();
+  const back = $('card-back').value.trim();
+
+  if (!front || !back) {
+    $('card-error').textContent = 'Bitte fülle Vorder- und Rückseite aus.';
+    return;
+  }
+
+  if (editingCardId) {
+    // Bestehende Karte ändern – Lernfortschritt bleibt erhalten
+    const card = data.cards.find(c => c.id === editingCardId);
+    card.front = front;
+    card.back = back;
+  } else {
+    data.cards.push(createCard(currentDeckId, front, back));
+  }
+  saveData();
+  $('card-dialog').close();
+  renderDeck();
+});
+
+function deleteCard(cardId) {
+  const card = data.cards.find(c => c.id === cardId);
+  if (!confirm('Karte „' + card.front + '“ löschen?')) return;
+  data.cards = data.cards.filter(c => c.id !== cardId);
+  saveData();
+  renderDeck();
+}
+
+// --- Lernmodus ---
+
+let studyQueue = [];       // IDs der Karten, die in dieser Sitzung noch drankommen
+let studyStartCount = 0;   // wie viele es am Anfang waren
+let studyMode = 'deck';    // 'deck' = ein Deck, 'subject' = ganzes Fach
+let studyReturn = 'home';  // auf welchen Bildschirm es danach zurückgeht
+let answerShown = false;   // ist die Rückseite gerade sichtbar?
+
+// mode: 'deck' oder 'subject', id: die ID des Decks bzw. Fachs
+function startStudy(mode, id) {
+  ensureToday();
+  const today = todayString();
+  const decks = mode === 'deck' ? [findDeck(id)] : decksOfSubject(id);
+
+  const due = [];
+  const fresh = [];
+  for (const deck of decks) {
+    const cards = cardsOfDeck(deck.id);
+    // Fällige Karten (auch Karten in der Lernphase)
+    due.push(...cards.filter(c => c.due !== null && c.due <= today));
+    // Neue Karten in der Reihenfolge, in der sie angelegt wurden – je Deck nur bis zum Tageslimit
+    fresh.push(...cards
+      .filter(c => c.due === null)
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+      .slice(0, newLeftToday(deck.id)));
+  }
+  due.sort((a, b) => a.due.localeCompare(b.due)); // die ältesten zuerst
+
+  studyQueue = [...due, ...fresh].map(c => c.id);
+  studyStartCount = studyQueue.length;
+  studyMode = mode;
+  studyReturn = currentScreen();
+
+  $('title').textContent = mode === 'deck' ? findDeck(id).name : findSubject(id).name;
+  showScreen('study');
+  showNextCard();
+}
+
+// Nach dem Lernen dorthin zurück, wo man gestartet hat
+function returnFromStudy() {
+  if (studyReturn === 'deck' && findDeck(currentDeckId)) openDeck(currentDeckId);
+  else if (studyReturn === 'subject' && findSubject(currentSubjectId)) openSubject(currentSubjectId);
+  else showHome();
+}
+
+// Welche Karte aus der Warteschlange ist als Nächstes dran?
+// 1. Eine Karte in der Lernphase, deren Wartezeit (5 bzw. 10 Min.) abgelaufen ist
+// 2. sonst die nächste fällige oder neue Karte
+// 3. sonst (nur noch wartende Lernkarten übrig) die, die am frühesten dran wäre –
+//    wie bei Anki: Man muss nicht vor dem Bildschirm warten.
+function pickNextIndex() {
+  const now = Date.now();
+  const cards = studyQueue.map(id => data.cards.find(c => c.id === id));
+
+  let best = -1;
+  cards.forEach((card, i) => {
+    if (card.learning && card.dueAt <= now) {
+      if (best === -1 || card.dueAt < cards[best].dueAt) best = i;
+    }
+  });
+  if (best !== -1) return best;
+
+  const normal = cards.findIndex(card => !card.learning);
+  if (normal !== -1) return normal;
+
+  best = 0;
+  cards.forEach((card, i) => {
+    if (card.dueAt < cards[best].dueAt) best = i;
+  });
+  return best;
+}
+
+// Nächste Karte aus der Warteschlange zeigen (nur Vorderseite)
+function showNextCard() {
+  answerShown = false;
+  document.activeElement.blur(); // Fokus von Buttons nehmen (wichtig für die Tastatur)
+
+  if (studyQueue.length === 0) {
+    $('study-area').classList.add('hidden');
+    $('study-done').classList.remove('hidden');
+    $('study-done-text').textContent = studyStartCount === 0
+      ? 'Heute gibt es hier nichts zu lernen.'
+      : 'Geschafft! 🎉 Für heute ist alles erledigt.';
+    return;
+  }
+
+  // Die passende nächste Karte nach vorn in die Warteschlange holen
+  const index = pickNextIndex();
+  const [nextId] = studyQueue.splice(index, 1);
+  studyQueue.unshift(nextId);
+
+  const card = data.cards.find(c => c.id === studyQueue[0]);
+  $('study-area').classList.remove('hidden');
+  $('study-done').classList.add('hidden');
+  // Beim Lernen eines ganzen Fachs zusätzlich anzeigen, aus welchem Deck die Karte stammt
+  $('study-progress').textContent = 'Noch ' + cardWord(studyQueue.length) +
+    (studyMode === 'subject' ? ' · ' + findDeck(card.deckId).name : '');
+  $('study-front').textContent = card.front;
+  $('study-back').textContent = card.back;
+  $('study-back').classList.add('hidden');
+  $('study-divider').classList.add('hidden');
+  $('btn-show-answer').classList.remove('hidden');
+  $('rating-buttons').classList.add('hidden');
+}
+
+// Rückseite und Bewertungs-Buttons zeigen
+function showAnswer() {
+  if (answerShown || studyQueue.length === 0) return;
+  answerShown = true;
+  document.activeElement.blur();
+
+  const card = data.cards.find(c => c.id === studyQueue[0]);
+  $('study-back').classList.remove('hidden');
+  $('study-divider').classList.remove('hidden');
+  $('btn-show-answer').classList.add('hidden');
+  $('rating-buttons').classList.remove('hidden');
+
+  // Unter jeden Button schreiben, wann die Karte dann wiederkommt
+  document.querySelectorAll('#rating-buttons button').forEach(button => {
+    button.querySelector('small').textContent = intervalText(card, Number(button.dataset.q));
+  });
+}
+
+// Eine Bewertung abgeben
+function rate(q) {
+  if (!answerShown) return;
+  const cardId = studyQueue.shift(); // erste Karte aus der Warteschlange nehmen
+  const card = data.cards.find(c => c.id === cardId);
+  applyRating(card, q);
+  if (card.learning) studyQueue.push(cardId); // Lernphase → kommt in dieser Sitzung wieder
+  showNextCard();
+}
+
+// Tastatur am PC: Leertaste = Antwort zeigen, 1–4 = Nochmal/Schwer/Gut/Einfach
+document.addEventListener('keydown', event => {
+  if (currentScreen() !== 'study') return;
+  if (document.querySelector('dialog[open]')) return;
+
+  if (event.key === ' ') {
+    event.preventDefault(); // sonst scrollt die Seite
+    showAnswer();
+  }
+  const keyToQ = { '1': 0, '2': 3, '3': 4, '4': 5 };
+  if (event.key in keyToQ) rate(keyToQ[event.key]);
+});
+
+// --- Import ---
+
+let importRows = []; // Vorschau-Zeilen: { front, back, include }
+let importEls = [];  // die passenden HTML-Elemente je Zeile (für schnelle Updates)
+
+// Beliebigen Wert in Text umwandeln (fehlend → leerer Text)
+function toText(value) {
+  return value === undefined || value === null ? '' : String(value).trim();
+}
+
+function openImport() {
+  $('title').textContent = 'Importieren';
+  $('import-text').value = '';
+  $('import-file').value = '';
+  $('import-error').textContent = '';
+  $('import-input').classList.remove('hidden');
+  $('import-preview').classList.add('hidden');
+  showScreen('import');
+}
+
+// Prüft den eingefügten Text und wandelt ihn in Vorschau-Zeilen um.
+// Bei Problemen wird mit "throw" eine verständliche Fehlermeldung ausgelöst.
+function parseImportText(text) {
+  text = text.trim();
+  if (!text) throw new Error('Bitte füge JSON ein oder wähle eine Datei aus.');
+
+  // Großzügig sein: nur den Teil von der ersten { bis zur letzten } nehmen.
+  // So stören z. B. ```json-Markierungen oder ein Satz davor nicht.
+  const start = text.indexOf('{');
+  const end = text.lastIndexOf('}');
+  if (start === -1 || end < start) {
+    throw new Error('Im Text wurde kein JSON gefunden. Es muss mit { beginnen und mit } enden.');
+  }
+  const jsonText = text.slice(start, end + 1);
+
+  let parsed;
+  try {
+    parsed = JSON.parse(jsonText);
+  } catch (e) {
+    // Der Browser nennt die Fehlerstelle (auf Englisch) – wir machen daraus eine Zeilennummer
+    const linesBefore = text.slice(0, start).split('\n').length - 1;
+    let where = '';
+    const lineMatch = /line (\d+)/i.exec(e.message);
+    const posMatch = /position (\d+)/i.exec(e.message);
+    if (lineMatch) where = ' (ungefähr in Zeile ' + (Number(lineMatch[1]) + linesBefore) + ')';
+    else if (posMatch) where = ' (ungefähr in Zeile ' + (jsonText.slice(0, Number(posMatch[1])).split('\n').length + linesBefore) + ')';
+    throw new Error('Das JSON ist ungültig' + where + '. Häufige Ursachen: ein fehlendes Komma ' +
+                    'zwischen zwei Karten, ein fehlendes Anführungszeichen oder eine fehlende Klammer.');
+  }
+
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+    throw new Error('Erwartet wird ein Objekt in der Form {"deck": "…", "cards": […]}.');
+  }
+  if (!Array.isArray(parsed.cards)) {
+    throw new Error('Es fehlt die Kartenliste „cards“ (in eckigen Klammern [ ]).');
+  }
+  if (parsed.cards.length === 0) {
+    throw new Error('Die Kartenliste „cards“ ist leer.');
+  }
+
+  const rows = parsed.cards.map((item, i) => {
+    if (typeof item !== 'object' || item === null || Array.isArray(item)) {
+      throw new Error('Karte ' + (i + 1) + ' hat das falsche Format. Erwartet: {"front": "…", "back": "…"}.');
+    }
+    return { front: toText(item.front), back: toText(item.back), include: true };
+  });
+  return { subject: toText(parsed.subject), deck: toText(parsed.deck), rows: rows };
+}
+
+// "Einlesen" geklickt
+function parseImport() {
+  $('import-error').textContent = '';
+  let result;
+  try {
+    result = parseImportText($('import-text').value);
+  } catch (e) {
+    $('import-error').textContent = e.message;
+    return;
+  }
+  importRows = result.rows;
+
+  // Fach vorausfüllen: aus dem JSON, sonst das gerade offene Fach,
+  // sonst das einzige vorhandene Fach
+  let subjectName = result.subject;
+  if (!subjectName && currentSubjectId) subjectName = findSubject(currentSubjectId).name;
+  if (!subjectName && data.subjects.length === 1) subjectName = data.subjects[0].name;
+  $('import-subject').value = subjectName;
+  $('import-deck').value = result.deck;
+
+  // Vorschläge für das Fach-Feld
+  const options = $('subject-options');
+  options.innerHTML = '';
+  for (const subject of data.subjects) {
+    const option = el('option');
+    option.value = subject.name;
+    options.appendChild(option);
+  }
+
+  // Doppelte Karten beim Einlesen standardmäßig NICHT übernehmen
+  const flags = computeFlags();
+  importRows.forEach((row, i) => { if (flags[i].dup) row.include = false; });
+
+  $('import-input').classList.add('hidden');
+  $('import-preview').classList.remove('hidden');
+  renderImportList();
+  window.scrollTo(0, 0);
+}
+
+// Das Fach und das Deck, in die importiert wird – falls sie schon existieren
+function targetSubject() {
+  const name = normalize($('import-subject').value);
+  if (!name) return undefined;
+  return data.subjects.find(s => normalize(s.name) === name);
+}
+
+function targetDeck() {
+  const subject = targetSubject();
+  const name = normalize($('import-deck').value);
+  if (!subject || !name) return undefined;
+  return data.decks.find(d => d.subjectId === subject.id && normalize(d.name) === name);
+}
+
+// Für jede Vorschau-Zeile prüfen: doppelt? leer oder unleserlich?
+function computeFlags() {
+  const deck = targetDeck();
+  const existing = new Map(); // Vorderseite → vorhandene Karte im Zieldeck
+  if (deck) {
+    for (const card of cardsOfDeck(deck.id)) existing.set(normalize(card.front), card);
+  }
+  const seen = new Set(); // Vorderseiten, die weiter oben in der Liste schon vorkamen
+
+  return importRows.map(row => {
+    const key = normalize(row.front);
+    const flag = { dup: false, bad: false, note: '' };
+
+    if (!row.front.trim() || !row.back.trim()) {
+      flag.bad = true;
+      flag.note = 'Vorder- oder Rückseite ist leer.';
+    } else if (row.front.includes('???') || row.back.includes('???')) {
+      flag.bad = true;
+      flag.note = 'Unleserlich – bitte korrigieren oder löschen.';
+    }
+
+    if (key && existing.has(key)) {
+      const old = existing.get(key);
+      flag.dup = true;
+      if (!flag.note) flag.note = 'Gibt es schon im Deck: „' + old.front + ' – ' + old.back + '“';
+    } else if (key && seen.has(key)) {
+      flag.dup = true;
+      if (!flag.note) flag.note = 'Kommt in dieser Liste mehrfach vor.';
+    }
+    if (key) seen.add(key);
+    return flag;
+  });
+}
+
+// Vorschau-Liste komplett neu aufbauen (nach dem Einlesen und nach dem Löschen einer Zeile)
+function renderImportList() {
+  const list = $('import-list');
+  list.innerHTML = '';
+  importEls = [];
+
+  importRows.forEach((row, i) => {
+    const li = el('li', 'import-row');
+
+    const head = el('div', 'import-row-head');
+    const label = el('label');
+    const checkbox = el('input');
+    checkbox.type = 'checkbox';
+    checkbox.checked = row.include;
+    checkbox.addEventListener('change', () => {
+      row.include = checkbox.checked;
+      updateImportStatus();
+    });
+    label.appendChild(checkbox);
+    label.appendChild(el('span', '', 'übernehmen'));
+    head.appendChild(label);
+
+    const deleteButton = el('button', 'icon-btn', '🗑️');
+    deleteButton.setAttribute('aria-label', 'Eintrag löschen');
+    deleteButton.addEventListener('click', () => {
+      importRows.splice(i, 1); // Zeile aus der Liste entfernen
+      renderImportList();
+    });
+    head.appendChild(deleteButton);
+    li.appendChild(head);
+
+    // Zwei Eingabefelder – Änderungen landen sofort in importRows
+    for (const side of ['front', 'back']) {
+      const input = el('input');
+      input.type = 'text';
+      input.value = row[side];
+      input.placeholder = side === 'front' ? 'Vorderseite' : 'Rückseite';
+      input.setAttribute('aria-label', input.placeholder);
+      input.addEventListener('input', () => {
+        row[side] = input.value;
+        updateImportStatus();
+      });
+      li.appendChild(input);
+    }
+
+    const note = el('p', 'import-note');
+    li.appendChild(note);
+
+    list.appendChild(li);
+    importEls.push({ li: li, note: note });
+  });
+
+  if (importRows.length === 0) {
+    list.appendChild(el('li', 'empty', 'Keine Einträge mehr übrig.'));
+  }
+  updateImportStatus();
+}
+
+// Markierungen, Zähler und Hinweise aktualisieren, ohne die Liste neu aufzubauen
+// (so bleibt beim Tippen der Cursor im Eingabefeld)
+function updateImportStatus() {
+  const flags = computeFlags();
+  let dupCount = 0;
+  let badCount = 0;
+  let includeCount = 0;
+
+  importRows.forEach((row, i) => {
+    const flag = flags[i];
+    const parts = importEls[i];
+    parts.li.classList.toggle('bad', flag.bad);
+    parts.li.classList.toggle('dup', flag.dup && !flag.bad);
+    parts.li.classList.toggle('excluded', !row.include);
+    parts.note.textContent = flag.note;
+    parts.note.classList.toggle('hidden', !flag.note);
+    if (flag.dup) dupCount++;
+    if (flag.bad) badCount++;
+    if (row.include) includeCount++;
+  });
+
+  let summary = cardWord(importRows.length);
+  if (dupCount) summary += ' · ' + dupCount + ' doppelt';
+  if (badCount) summary += ' · ' + badCount + ' zu prüfen';
+  $('import-summary').textContent = summary;
+
+  // Hinweis, was beim Übernehmen mit Fach und Deck passiert
+  const subjectName = $('import-subject').value.trim();
+  const deckName = $('import-deck').value.trim();
+  let info;
+  if (!subjectName) info = 'Bitte gib ein Fach ein.';
+  else if (!deckName) info = 'Bitte gib einen Decknamen ein.';
+  else if (!targetSubject()) info = 'Fach und Deck werden neu angelegt.';
+  else if (targetDeck()) info = 'Dieses Deck gibt es schon – die Karten werden hinzugefügt.';
+  else info = 'Das Deck wird im Fach „' + targetSubject().name + '“ neu angelegt.';
+  $('import-deck-info').textContent = info;
+
+  $('btn-import-save').textContent = 'Übernehmen (' + includeCount + ')';
+  $('btn-import-save').disabled = includeCount === 0;
+  $('import-save-error').textContent = '';
+}
+
+// "Übernehmen" geklickt: Karten wirklich ins Deck schreiben
+function saveImport() {
+  const subjectName = $('import-subject').value.trim();
+  const deckName = $('import-deck').value.trim();
+  if (!subjectName || !deckName) {
+    $('import-save-error').textContent = 'Bitte gib oben ein Fach und einen Decknamen ein.';
+    $(subjectName ? 'import-deck' : 'import-subject').focus();
+    return;
+  }
+
+  // Angehakte Einträge, die leer oder unleserlich sind, nicht übernehmen
+  const flags = computeFlags();
+  const problem = importRows.findIndex((row, i) => row.include && flags[i].bad);
+  if (problem !== -1) {
+    $('import-save-error').textContent = 'Eintrag ' + (problem + 1) + ' ist leer oder unleserlich. ' +
+      'Bitte korrigieren, löschen oder den Haken entfernen.';
+    importEls[problem].li.scrollIntoView({ block: 'center' });
+    return;
+  }
+
+  // Fach und Deck suchen oder neu anlegen
+  let subject = targetSubject();
+  if (!subject) {
+    subject = { id: newId(), name: subjectName, createdAt: new Date().toISOString() };
+    data.subjects.push(subject);
+  }
+  let deck = targetDeck();
+  if (!deck) {
+    deck = { id: newId(), subjectId: subject.id, name: deckName, createdAt: new Date().toISOString() };
+    data.decks.push(deck);
+  }
+
+  const chosen = importRows.filter(row => row.include);
+  for (const row of chosen) {
+    data.cards.push(createCard(deck.id, row.front.trim(), row.back.trim()));
+  }
+  saveData();
+  importRows = [];
+  openDeck(deck.id);
+  showToast(cardWord(chosen.length) + ' importiert');
+}
+
+// Datei gewählt: Inhalt ins Textfeld schreiben und direkt einlesen
+$('import-file').addEventListener('change', () => {
+  const file = $('import-file').files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    $('import-text').value = reader.result;
+    $('import-file').value = ''; // damit dieselbe Datei nochmal gewählt werden kann
+    parseImport();
+  };
+  reader.onerror = () => {
+    $('import-error').textContent = 'Die Datei konnte nicht gelesen werden.';
+  };
+  reader.readAsText(file);
+});
+
+// --- Einstellungen ---
+
+function openSettings() {
+  $('title').textContent = 'Einstellungen';
+  $('setting-new-per-day').value = data.settings.newPerDay;
+  $('settings-error').textContent = '';
+  $('backup-error').textContent = '';
+  renderBackupInfo();
+  showScreen('settings');
+}
+
+function saveSettings() {
+  const value = Number($('setting-new-per-day').value);
+  if (!Number.isInteger(value) || value < 0 || value > 999) {
+    $('settings-error').textContent = 'Bitte gib eine ganze Zahl zwischen 0 und 999 ein.';
+    return;
+  }
+  data.settings.newPerDay = value;
+  saveData();
+  showHome();
+}
+
+// --- Backup ---
+
+// Wann zuletzt ein Backup heruntergeladen wurde, merken wir uns getrennt von den
+// eigentlichen Daten – sonst würde jedes Backup die Daten selbst "verändern".
+const BACKUP_KEY = STORAGE_KEY + '_letztesBackup';
+
+function renderBackupInfo() {
+  const last = localStorage.getItem(BACKUP_KEY);
+  $('backup-info').textContent = last
+    ? 'Letztes Backup: ' + new Date(last).toLocaleString('de-DE', { dateStyle: 'medium', timeStyle: 'short' })
+    : 'Du hast auf diesem Gerät noch kein Backup heruntergeladen.';
+}
+
+// Alle Daten als .json-Datei herunterladen
+function exportBackup() {
+  // JSON.stringify(…, null, 2) rückt den Text ein, damit er auch für Menschen lesbar ist
+  const text = JSON.stringify(data, null, 2);
+  // Ein "Blob" ist eine Datei im Arbeitsspeicher des Browsers …
+  const blob = new Blob([text], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  // … und ein unsichtbarer Download-Link, den wir einmal "anklicken"
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = 'vokabeln-backup-' + todayString() + '.json';
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000); // Speicher wieder freigeben
+
+  localStorage.setItem(BACKUP_KEY, new Date().toISOString());
+  renderBackupInfo();
+  showToast('Backup heruntergeladen');
+}
+
+// Backup-Datei prüfen und – nach Rückfrage – die aktuellen Daten damit ersetzen
+function restoreBackup(text) {
+  $('backup-error').textContent = '';
+  let backup;
+  try {
+    backup = JSON.parse(text);
+  } catch (e) {
+    $('backup-error').textContent = 'Die Datei ist kein gültiges JSON – vermutlich keine Backup-Datei dieser App.';
+    return;
+  }
+
+  const isObject = typeof backup === 'object' && backup !== null && !Array.isArray(backup);
+  if (isObject && !Array.isArray(backup.decks) && 'deck' in backup) {
+    // Verwechslung mit einer Vokabel-Datei abfangen
+    $('backup-error').textContent = 'Das ist eine Vokabel-Datei, kein Backup. ' +
+      'Nutze dafür „Vokabeln importieren“ auf der Startseite.';
+    return;
+  }
+  if (!isObject || !Array.isArray(backup.decks) || !Array.isArray(backup.cards)) {
+    $('backup-error').textContent = 'Das ist keine Backup-Datei dieser App.';
+    return;
+  }
+
+  // Ältere Backups ins aktuelle Format bringen und fehlende Teile ergänzen
+  migrate(backup);
+  if (!backup.settings) backup.settings = { newPerDay: 20 };
+  if (!backup.today) backup.today = { date: todayString(), newStudied: {} };
+
+  const when = backup.updatedAt
+    ? new Date(backup.updatedAt).toLocaleString('de-DE', { dateStyle: 'medium', timeStyle: 'short' })
+    : 'unbekannt';
+  const ok = confirm('Backup vom ' + when + ' wiederherstellen?\n\n' +
+    'Es enthält ' + backup.subjects.length + (backup.subjects.length === 1 ? ' Fach, ' : ' Fächer, ') +
+    deckWord(backup.decks.length) + ' und ' + cardWord(backup.cards.length) + '.\n\n' +
+    'Achtung: Alle aktuellen Daten auf diesem Gerät werden dadurch ersetzt.');
+  if (!ok) return;
+
+  // Sicherheitskopie des bisherigen Stands, falls doch das falsche Backup gewählt wurde
+  localStorage.setItem(STORAGE_KEY + '_vorWiederherstellung', JSON.stringify(data));
+
+  data = backup;
+  saveData();
+  showHome();
+  showToast('Backup wiederhergestellt');
+}
+
+// Datei gewählt → lesen → wiederherstellen
+$('backup-file').addEventListener('change', () => {
+  const file = $('backup-file').files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    $('backup-file').value = ''; // damit dieselbe Datei nochmal gewählt werden kann
+    restoreBackup(reader.result);
+  };
+  reader.onerror = () => {
+    $('backup-error').textContent = 'Die Datei konnte nicht gelesen werden.';
+  };
+  reader.readAsText(file);
+});
+
+// --- Buttons mit ihren Aktionen verbinden ---
+
+$('btn-back').addEventListener('click', goBack);
+
+$('btn-new-subject').addEventListener('click', newSubject);
+$('btn-import').addEventListener('click', openImport);
+$('btn-settings').addEventListener('click', openSettings);
+
+$('btn-study-subject').addEventListener('click', () => startStudy('subject', currentSubjectId));
+$('btn-new-deck').addEventListener('click', newDeck);
+$('btn-import-subject').addEventListener('click', openImport);
+$('btn-subject-menu').addEventListener('click', () => openSubjectMenu(currentSubjectId));
+
+$('btn-study-deck').addEventListener('click', () => startStudy('deck', currentDeckId));
+$('btn-new-card').addEventListener('click', () => openCardDialog(null));
+$('btn-deck-menu').addEventListener('click', () => openDeckMenu(currentDeckId));
+$('card-search').addEventListener('input', renderDeck);
+
+$('btn-show-answer').addEventListener('click', showAnswer);
+document.querySelectorAll('#rating-buttons button').forEach(button => {
+  button.addEventListener('click', () => rate(Number(button.dataset.q)));
+});
+$('btn-study-done').addEventListener('click', returnFromStudy);
+
+$('btn-parse').addEventListener('click', parseImport);
+$('btn-import-save').addEventListener('click', saveImport);
+$('import-subject').addEventListener('input', updateImportStatus);
+$('import-deck').addEventListener('input', updateImportStatus);
+$('btn-import-cancel').addEventListener('click', () => {
+  // zurück zum Textfeld – der eingefügte Text bleibt erhalten
+  $('import-preview').classList.add('hidden');
+  $('import-input').classList.remove('hidden');
+});
+
+$('btn-save-settings').addEventListener('click', saveSettings);
+$('btn-export').addEventListener('click', exportBackup);
+
+// Alle "Abbrechen"-Buttons schließen ihren Dialog
+document.querySelectorAll('[data-close]').forEach(button => {
+  button.addEventListener('click', () => button.closest('dialog').close());
+});
+
+
+/* ---------- START ---------------------------------------- */
+
+// Das Logo aus der Kopfzeile auch als Hintergrund-Wasserzeichen verwenden
+// (so steht das Bild nur einmal in der Datei)
+document.documentElement.style.setProperty('--logo-url', 'url("' + document.querySelector('.logo').src + '")');
+
+showHome();
+</script>
+</body>
+</html>
