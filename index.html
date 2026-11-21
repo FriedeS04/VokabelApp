@@ -834,7 +834,8 @@ function createCard(deckId, front, back) {
     ease: 2.5,       // Ease-Faktor: wie "leicht" die Karte ist
     due: null,       // Fälligkeitsdatum; null = neue Karte
     lapses: 0,       // wie oft vergessen
-    learning: false, // true = in der Lernphase (Wiederholung nach Minuten)
+    learning: false, // true = kommt heute nochmal (Wiederholung nach Minuten)
+    step: 0,         // 1 = in der Lernphase schon einmal "Gut" gedrückt
     dueAt: null,     // nur in der Lernphase: Zeitpunkt (ms), ab dem die Karte wieder drankommt
     createdAt: new Date().toISOString()
   };
@@ -845,16 +846,26 @@ function createCard(deckId, front, back) {
 // SM-2 arbeitet mit Noten von 0 bis 5. Unsere Buttons:
 // Nochmal = 0, Schwer = 3, Gut = 4, Einfach = 5
 //
-// Jede Karte ist in einer von zwei Phasen:
-// • Lernphase (neue oder vergessene Karten): Wiederholung nach Minuten.
-//     Nochmal → 5 Min., Schwer → 10 Min., Gut → 1 Tag, Einfach → 4 Tage.
-//     Erst mit Gut oder Einfach verlässt die Karte die Lernphase.
-// • Wiederholungsphase: Abstände in Tagen nach SM-2.
-//     Nochmal → Karte gilt als vergessen und geht zurück in die Lernphase.
+// Grundregel: Nur mit Gut oder Einfach kommt eine Karte weiter.
+//   Nochmal → in 5 Minuten wieder (eine schon gelernte Karte gilt als vergessen
+//             und fängt von vorn an)
+//   Schwer  → in 10 Minuten wieder, also noch heute
+//   Gut     → sanfte Stufen: 15 Minuten → 1 Tag → 2 Tage → 8 Tage,
+//             danach jeweils × Ease-Faktor (bei 2,5: 20 Tage, 50 Tage …)
+//   Einfach → neue Karte: direkt 4 Tage, sonst deutlich mehr als bei Gut (× 1,3)
+//
+// Wurde eine schon gelernte Karte mit "Schwer" bewertet und danach am selben Tag
+// mit "Gut" bestanden, wächst ihr Abstand NICHT – sie bleibt auf ihrem Abstand.
+// Außerdem sinkt ihr Ease-Faktor um 0,2, sodass sie auch danach langsamer wächst.
 
 const AGAIN_MINUTES = 5;
 const HARD_MINUTES = 10;
-const EASY_DAYS = 4;
+const GOOD_MINUTES = 15;          // erstes "Gut" bei einer neuen Karte: heute nochmal
+const GOOD_STEPS = [1, 2, 8];     // danach mit "Gut": 1 Tag, 2 Tage, 8 Tage, dann × Ease
+const EASY_DAYS = 4;    // erster Abstand bei "Einfach" für neue Karten
+const HARD_FACTOR = 1.0;        // Wachstum nach "Schwer" (1,0 = Abstand bleibt gleich)
+const HARD_EASE_PENALTY = 0.2;  // so stark senkt "Schwer" den Ease-Faktor
+const EASY_BONUS = 1.3;  // Zuschlag für "Einfach" gegenüber "Gut"
 
 // SM-2-Formel für den Ease-Faktor (Schwer senkt ihn, Gut hält ihn, Einfach erhöht ihn)
 function newEase(ease, q) {
@@ -866,45 +877,76 @@ function newEase(ease, q) {
 // Berechnet, wie es mit einer Karte bei Note q weitergeht.
 // Die Karte selbst wird hier NICHT verändert – so können wir die
 // Funktion auch für die Vorschau unter den Buttons benutzen.
-// Ergebnis: learning + minutes (Lernphase) oder interval in Tagen (Wiederholungsphase).
+// Ergebnis: learning + minutes (heute nochmal) oder interval in Tagen.
 function nextState(card, q) {
   const result = {
     reps: card.reps, interval: card.interval, ease: card.ease,
+    step: card.step || 0, // 1 = in der Lernphase schon einmal "Gut" gedrückt
     learning: false, minutes: null, lapse: false
   };
-  const inLearning = card.due === null || card.learning;
+  const inLearning = card.due === null || card.learning;   // neu oder heute schon wiederholt
+  const afterHard = card.learning && card.reps > 0;        // gelernte Karte, heute mit "Schwer" bewertet
 
-  if (inLearning) {
-    if (q === 0 || q === 3) {
-      // Nochmal / Schwer: in der Lernphase bleiben, gleich nochmal
-      result.learning = true;
-      result.minutes = q === 0 ? AGAIN_MINUTES : HARD_MINUTES;
-    } else {
-      // Gut / Einfach: Lernphase geschafft → ab jetzt Abstände in Tagen
-      result.reps = 1;
-      result.interval = q === 4 ? 1 : EASY_DAYS;
-      result.ease = newEase(card.ease, q);
+  // Nochmal: in 5 Minuten wieder
+  if (q === 0) {
+    result.learning = true;
+    result.minutes = AGAIN_MINUTES;
+    result.step = 0; // Lernstufe von vorn
+    if (card.reps > 0) {
+      // Eine schon gelernte Karte wurde vergessen → Wiederholungen von vorn.
+      // Der Ease-Faktor bleibt laut SM-2 unverändert.
+      result.reps = 0;
+      result.interval = 0;
+      result.lapse = true;
     }
     return result;
   }
 
-  // Wiederholungsphase
-  if (q === 0) {
-    // Vergessen: zurück in die Lernphase, Wiederholungen beginnen von vorn.
-    // Der Ease-Faktor bleibt laut SM-2 unverändert.
+  // Schwer: in 10 Minuten wieder – die Karte kommt NICHT weiter
+  if (q === 3) {
     result.learning = true;
-    result.minutes = AGAIN_MINUTES;
-    result.reps = 0;
-    result.interval = 0;
-    result.lapse = true;
+    result.minutes = HARD_MINUTES;
+    // Bei einer gelernten Karte: einmalig als etwas schwerer einstufen
+    if (!inLearning) result.ease = Math.max(1.3, Math.round((card.ease - HARD_EASE_PENALTY) * 100) / 100);
     return result;
   }
-  // Gewusst: SM-2 – erst 1 Tag, dann 6 Tage, dann jeweils × Ease-Faktor
-  result.ease = newEase(card.ease, q);
+
+  // Ab hier: Gut (4) oder Einfach (5) → die Karte kommt auf einen späteren Tag
+
+  if (afterHard) {
+    // Heute zuerst "Schwer", jetzt gewusst: Abstand wächst nicht (× HARD_FACTOR)
+    const good = Math.max(1, Math.round(card.interval * HARD_FACTOR));
+    result.interval = q === 4 ? good : Math.max(good + 1, Math.round(card.interval * card.ease));
+    result.reps = card.reps + 1;
+    result.step = 0;
+    return result;
+  }
+
+  if (inLearning) {
+    // Neue oder vergessene Karte:
+    // erstes "Gut" → in 15 Minuten nochmal, zweites "Gut" → 1 Tag
+    if (q === 4 && result.step === 0) {
+      result.learning = true;
+      result.minutes = GOOD_MINUTES;
+      result.step = 1;
+      return result;
+    }
+    result.reps = 1;
+    result.interval = q === 4 ? GOOD_STEPS[0] : EASY_DAYS;
+    result.ease = newEase(card.ease, q);
+    result.step = 0;
+    return result;
+  }
+
+  // Wiederholungsphase: mit "Gut" erst 2 Tage, dann 8 Tage, danach × Ease-Faktor.
+  // Math.max(…, interval + 1) sorgt dafür, dass der Abstand nie kleiner wird.
   result.reps = card.reps + 1;
-  if (result.reps === 1) result.interval = 1;
-  else if (result.reps === 2) result.interval = 6;
-  else result.interval = Math.round(card.interval * result.ease);
+  result.ease = newEase(card.ease, q);
+  const fixedStep = GOOD_STEPS[result.reps - 1]; // reps 2 → 2 Tage, reps 3 → 8 Tage
+  const good = fixedStep
+    ? Math.max(fixedStep, card.interval + 1)
+    : Math.round(card.interval * card.ease);
+  result.interval = q === 4 ? good : Math.max(good + 1, Math.round(good * EASY_BONUS));
   return result;
 }
 
@@ -918,6 +960,7 @@ function applyRating(card, q) {
   card.interval = result.interval;
   card.ease = result.ease;
   card.learning = result.learning;
+  card.step = result.step;
 
   if (result.learning) {
     card.due = todayString();                         // zählt heute als fällig
@@ -1253,7 +1296,7 @@ function openMenu(title, actions, text) {
 function resetCards(cards, deckIds) {
   for (const card of cards) {
     // Object.assign überschreibt mehrere Felder auf einmal
-    Object.assign(card, { reps: 0, interval: 0, ease: 2.5, due: null, lapses: 0, learning: false, dueAt: null });
+    Object.assign(card, { reps: 0, interval: 0, ease: 2.5, due: null, lapses: 0, learning: false, dueAt: null, step: 0 });
   }
   for (const deckId of deckIds) data.today.newStudied[deckId] = 0; // Tageslimit wieder frei
   saveData();
